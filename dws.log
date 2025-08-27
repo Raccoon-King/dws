@@ -1,0 +1,14 @@
+2025/08/27 14:13:55 DEBUG_MODE: true
+2025/08/27 14:13:55 listen tcp :8080: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.
+2025/08/27 14:14:27 DEBUG_MODE: true
+2025/08/27 14:14:27 listen tcp :8080: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.
+2025/08/27 14:14:56 DEBUG_MODE: true
+2025/08/27 14:14:56 listen tcp :8080: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.
+2025/08/27 14:15:34 DEBUG_MODE: true
+2025/08/27 14:15:34 listen tcp :8080: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.
+2025/08/27 14:16:00 DEBUG_MODE: true
+2025/08/27 14:16:00 listen tcp :8080: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.
+2025/08/27 14:16:29 DEBUG_MODE: true
+2025/08/27 14:16:29 listen tcp :8080: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.
+2025/08/27 14:16:58 DEBUG_MODE: true
+2025/08/27 14:16:58 listen tcp :8080: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.

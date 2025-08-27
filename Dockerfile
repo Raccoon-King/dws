@@ -27,7 +27,7 @@ WORKDIR /root/
 COPY --from=builder /app/dws .
 
 # Copy rules files
-COPY rules.yaml rules.json ./
+COPY rules.yaml ./
 
 # Create log directory
 RUN mkdir -p /var/log

@@ -1,0 +1,94 @@
+{
+  "rules": [
+    {
+      "ID": "disease-rabies",
+      "Pattern": "\b(rabies|rabid|rabies[-\s]*vector)\b",
+      "Severity": "high",
+      "Description": "Mentions of rabies or rabid behavior."
+    },
+    {
+      "ID": "disease-distemper",
+      "Pattern": "\b(canine\s+)?distemper\b",
+      "Severity": "high",
+      "Description": "Mentions of distemper."
+    },
+    {
+      "ID": "disease-leptospirosis",
+      "Pattern": "\b(leptospirosis|lepto)\b",
+      "Severity": "high",
+      "Description": "Mentions of leptospirosis."
+    },
+    {
+      "ID": "parasite-roundworm",
+      "Pattern": "\b(baylisascaris\s+procyonis|raccoon\s+roundworm|roundworm[s]?)\b",
+      "Severity": "high",
+      "Description": "Mentions of raccoon roundworm (Baylisascaris procyonis)."
+    },
+    {
+      "ID": "vermin-or-pest",
+      "Pattern": "\b(vermin|pest[s]?|nuisance[s]?)\b",
+      "Severity": "medium",
+      "Description": "Generic negative labels like vermin/pest/nuisance."
+    },
+    {
+      "ID": "aggressive-behavior",
+      "Pattern": "\b(aggressive|hostile|attack(?:ed|s|ing)?|charged?|lunged?)\b",
+      "Severity": "high",
+      "Description": "Mentions of aggressive or attacking behavior."
+    },
+    {
+      "ID": "bites-and-scratches",
+      "Pattern": "\b(bite(?:s|d|en|ing)?|scratch(?:es|ed|ing)?)\b",
+      "Severity": "high",
+      "Description": "Mentions of biting or scratching."
+    },
+    {
+      "ID": "property-damage",
+      "Pattern": "\b(damage(?:d|s|ing)?|destroy(?:ed|s|ing)|rip(?:ped|s|ping)|tear(?:s|ing|\s*up))\b",
+      "Severity": "medium",
+      "Description": "Mentions of property damage terms."
+    },
+    {
+      "ID": "structure-areas",
+      "Pattern": "\b(attic|chimney|soffit|roof|insulation|crawl\s*space|wall[s]?|ceiling|vent[s]?)\b",
+      "Severity": "informational",
+      "Description": "Mentions of home/structure areas often associated with raccoon intrusion."
+    },
+    {
+      "ID": "trash-raiding",
+      "Pattern": "\b(garbage|trash|dumpster|bin[s]?|can[s]?)\b.*\b(raid(?:ed|s|ing)?|rummag(?:e|ed|ing|es)|tip(?:ped|s|ping)\s*over)\b|\b(raid(?:ed|s|ing)?|rummag(?:e|ed|ing|es)|tip(?:ped|s|ping)\s*over)\b.*\b(garbage|trash|dumpster|bin[s]?|can[s]?)\b",
+      "Severity": "medium",
+      "Description": "Mentions of raccoons raiding or tipping over trash."
+    },
+    {
+      "ID": "zoonotic-risk",
+      "Pattern": "\b(zoonotic|disease\s*transmission|pathogen|infect(?:ion|ed|ious))\b",
+      "Severity": "medium",
+      "Description": "Mentions of zoonotic disease risk."
+    },
+    {
+      "ID": "feces-latrine",
+      "Pattern": "\b(latrine[s]?|feces|faeces|dropping[s]?|poop)\b",
+      "Severity": "medium",
+      "Description": "Mentions of raccoon latrines or feces."
+    },
+    {
+      "ID": "livestock-poultry",
+      "Pattern": "\b(chicken[s]?|coop[s]?|hen[s]?|duck[s]?|poultry|livestock)\b",
+      "Severity": "informational",
+      "Description": "Mentions of vulnerable animals often associated with predation/conflict."
+    },
+    {
+      "ID": "noise-and-mess",
+      "Pattern": "\b(noise|noisy|mess|messy|odor|smell|stink|stench)\b",
+      "Severity": "low",
+      "Description": "Mentions of unpleasant byproducts like noise, mess, or odors."
+    },
+    {
+      "ID": "correction-vermin-typo",
+      "Pattern": "\bvermon\b",
+      "Severity": "informational",
+      "Description": "Flags likely misspelling of 'vermin' as 'vermon'."
+    }
+  ]
+}

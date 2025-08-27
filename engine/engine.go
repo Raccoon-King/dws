@@ -17,6 +17,10 @@ func SetDebugMode(mode bool) {
 	debugMode = mode
 }
 
+// GetDebugMode returns the current debug mode for the engine package.
+func GetDebugMode() bool {
+	return debugMode
+}
 
 // Rule defines a pattern that will be searched in text.
 type Rule struct {
@@ -50,25 +54,29 @@ func GetRules() []Rule {
 }
 
 // LoadRulesFromYAML reads rule definitions from a YAML file and replaces the current rule set.
+type RulesConfig struct {
+	Rules []Rule `yaml:"rules"`
+}
+
 func LoadRulesFromYAML(path string) error {
-		data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	var rules []Rule
-	if err := yaml.Unmarshal(data, &rules); err != nil {
+	var config RulesConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
 		return err
 	}
 
-	for i := range rules {
-		compiled, err := regexp.Compile("(?s).*" + rules[i].Pattern + ".*")
+	for i := range config.Rules {
+		compiled, err := regexp.Compile(config.Rules[i].Pattern)
 		if err != nil {
-			return fmt.Errorf("failed to compile regex for rule %s: %w", rules[i].ID, err)
+			return fmt.Errorf("failed to compile regex for rule %s: %w", config.Rules[i].ID, err)
 		}
-		rules[i].CompiledPattern = compiled
+		config.Rules[i].CompiledPattern = compiled
 	}
 
-	SetRules(rules)
+	SetRules(config.Rules)
 	return nil
 }
 
@@ -88,7 +96,7 @@ func Evaluate(text, fileID string, rules []Rule) []Finding {
 		for _, rule := range rules {
 			if debugMode {
 				log.Printf("ENGINE_DEBUG:   Checking rule ID: %s, Pattern: %s", rule.ID, rule.Pattern)
-								log.Printf("ENGINE_DEBUG:   Compiled Pattern: %s", rule.CompiledPattern.String())
+				log.Printf("ENGINE_DEBUG:   Compiled Pattern: %s", rule.CompiledPattern.String())
 			}
 			if rule.CompiledPattern == nil {
 				if debugMode {
@@ -113,6 +121,9 @@ func Evaluate(text, fileID string, rules []Rule) []Finding {
 				})
 			}
 		}
+	}
+	if debugMode {
+		log.Printf("ENGINE_DEBUG: Findings before return: %+v", findings)
 	}
 	return findings
 }

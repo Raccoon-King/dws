@@ -40,7 +40,7 @@ func NewServer() (*http.Server, error) {
 	mux.HandleFunc("/rules/reload", api.ReloadRulesHandler)
 	mux.HandleFunc("/rules/load", api.LoadRulesFromFileHandler)
 	mux.HandleFunc("/health", api.HealthHandler)
-	return &http.Server{Addr: ":8080", Handler: mux}, nil
+	return &http.Server{Addr: ":8081", Handler: mux}, nil
 }
 
 func run() error {
@@ -54,5 +54,12 @@ func run() error {
 func main() {
 	initLogging()
 	engine.SetDebugMode(debugMode)
+
+	log.Printf("Loading rules from %s", "C:\\Users\\jesse\\dws\\rules.yaml")
+	if err := engine.LoadRulesFromYAML("C:\\Users\\jesse\\dws\\rules.yaml"); err != nil {
+		log.Fatalf("Failed to load rules from %s: %v", "C:\\Users\\jesse\\dws\\rules.yaml", err)
+	}
+	log.Println("Rules loaded successfully.")
+
 	log.Fatal(run())
 }

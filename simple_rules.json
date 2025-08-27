@@ -1,0 +1,10 @@
+{
+  "rules": [
+    {
+      "ID": "test-rule",
+      "Pattern": "raccoon",
+      "Severity": "informational",
+      "Description": "Test rule for raccoon."
+    }
+  ]
+}

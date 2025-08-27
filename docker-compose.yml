@@ -14,7 +14,7 @@ services:
       - DEBUG=false
     volumes:
       - ./rules.yaml:/root/rules.yaml:ro
-      - ./rules.json:/root/rules.json:ro
+      
       - dws-logs:/var/log
     restart: unless-stopped
     healthcheck:

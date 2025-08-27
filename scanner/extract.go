@@ -1,10 +1,13 @@
 package scanner
 
 import (
+	"bytes"
 	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/dslipak/pdf"
 )
 
 // ExtractText converts various document formats into plain text.
@@ -13,10 +16,23 @@ func ExtractText(data []byte, filename string) (string, error) {
 	var extractedText string
 	switch ext {
 	case ".pdf":
+		reader := bytes.NewReader(data)
+		pdfReader, err := pdf.NewReader(reader, int64(len(data)))
+		if err != nil {
+			return "", fmt.Errorf("failed to create PDF reader: %w", err)
+		}
+
 		var sb strings.Builder
-		re := regexp.MustCompile(`\(([^)]*)\)\s*T[Jj]`)
-		for _, m := range re.FindAllSubmatch(data, -1) {
-			sb.Write(m[1])
+		for i := 1; i <= pdfReader.NumPage(); i++ {
+			page := pdfReader.Page(i)
+			if page.V.IsNull() {
+				continue
+			}
+			text, err := page.GetPlainText(nil)
+			if err != nil {
+				return "", fmt.Errorf("failed to get plain text from page %d: %w", i, err)
+			}
+			sb.WriteString(text)
 		}
 		extractedText = sb.String()
 	case ".html", ".htm":

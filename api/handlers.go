@@ -38,8 +38,19 @@ func ScanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	findings := engine.Evaluate(text, header.Filename, engine.GetRules())
+	if engine.GetDebugMode() {
+		log.Printf("API_DEBUG: Findings before encoding: %+v", findings)
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(findings)
+	for _, finding := range findings {
+		jsonBytes, err := json.Marshal(finding)
+		if err != nil {
+			log.Printf("Error marshalling finding to JSON: %v", err)
+			continue
+		}
+		w.Write(jsonBytes)
+		w.Write([]byte("\n")) // Manually write newline
+	}
 }
 
 // ProcessDocumentHandler accepts a document, scans it, and returns findings in a report structure.
@@ -76,13 +87,20 @@ func ReloadRulesHandler(w http.ResponseWriter, r *http.Request) {
 		Rules []engine.Rule `json:"rules"`
 	}
 	var req request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read request body", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("Received /rules/reload request body: %s", body)
+
+	if err := json.Unmarshal(body, &req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
 	for i := range req.Rules {
-		compiled, err := regexp.Compile(".*" + req.Rules[i].Pattern + ".*")
+		compiled, err := regexp.Compile(req.Rules[i].Pattern)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to compile regex for rule %s: %v", req.Rules[i].ID, err), http.StatusBadRequest)
 			return

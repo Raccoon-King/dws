@@ -8,3 +8,6 @@ bin/
 .DS_Store
 Thumbs.db
 dws.log
+web-bundles/
+test_playbook.txt
+web-bundles/*

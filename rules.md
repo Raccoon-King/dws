@@ -55,15 +55,68 @@ When creating or modifying `rules.yaml`, consider the following:
 7.  **Validation**: After generating or modifying the `rules.yaml` file, it's crucial to validate its YAML syntax and test the regex patterns against sample data to ensure they function as expected.
 
 Example:
-rules.yaml
+    rules.yaml
 
-- id: profanity-1
-  pattern: "badword"
-  severity: high
-  description: "Detects common profanity"
-- id: sensitive-phrase-1
-  pattern: "confidential information"
-  severity: medium
-  description: "Detects sensitive phrases"
+    - id: profanity-1
+      pattern: "badword"
+      severity: high
+      description: "Detects common profanity"
+    - id: sensitive-phrase-1
+      pattern: "confidential information"
+      severity: medium
+      description: "Detects sensitive phrases"
 
 8.  **Backslash Escaping in Regex Patterns**: When defining `pattern` fields in YAML, especially for regular expression escape sequences like `\b` (word boundary), `\s` (whitespace), `\d` (digit), etc., you must use *double backslashes* (`\\`). This is because YAML parsers interpret a single backslash as an escape character. For example, `\b` should be written as `\\b`, and `\s` as `\\s`. Failure to do so will result in "unknown escape sequence" errors or incorrect pattern matching when the regex is compiled by the application. This is particularly important when LLMs generate these patterns, as they might not automatically handle YAML-specific escaping.
+
+## Generating JSON Rules from YAML
+
+For applications that require rules in JSON format, you can convert the `rules.yaml` file. When converting, it's crucial to understand how regular expression escape sequences are handled.
+
+**YAML to JSON Conversion and Regex Escaping:**
+
+*   In `rules.yaml`, regex escape sequences (like `\\b` for word boundary, `\\s` for whitespace, `\\d` for digit) must be represented with *quadruple backslashes* (e.g., `\\\\b`, `\\\\s`). This is because the YAML parser consumes the first two backslashes to produce a single literal backslash.
+*   When this YAML content is converted to JSON, these quadruple backslashes will correctly become *double backslashes* (e.g., `\\b`, `\\s`) within the JSON string. This is the standard and correct way to represent regex escape sequences in JSON strings for most regex engines (including Go's `regexp` package).
+
+**Example of Conversion:**
+
+If your `rules.yaml` contains:
+
+```yaml
+rules:
+  - id: example-rule
+    pattern: "\\\\bword\\\\s+boundary\\\\b"
+    severity: informational
+    description: "An example rule."
+```
+
+The corresponding JSON output will be:
+
+```json
+{
+  "rules": [
+    {
+      "ID": "example-rule",
+      "Pattern": "\\bword\\s+boundary\\b",
+      "Severity": "informational",
+      "Description": "An example rule."
+    }
+  ]
+}
+```
+
+**Recommended Conversion Method:**
+
+You can use a programming language (like Python or Go) with a YAML parser and JSON encoder to perform this conversion reliably. For example, in Python:
+
+```python
+import yaml
+import json
+
+with open('rules.yaml', 'r') as yaml_file:
+    yaml_content = yaml.safe_load(yaml_file)
+
+with open('rules.json', 'w') as json_file:
+    json.dump(yaml_content, json_file, indent=2)
+```
+
+This method ensures that the escaping is handled correctly during the conversion process.

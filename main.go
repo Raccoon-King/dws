@@ -55,11 +55,16 @@ func main() {
 	initLogging()
 	engine.SetDebugMode(debugMode)
 
-	log.Printf("Loading rules from %s", "C:\\Users\\jesse\\dws\\rules.yaml")
-	if err := engine.LoadRulesFromYAML("C:\\Users\\jesse\\dws\\rules.yaml"); err != nil {
-		log.Fatalf("Failed to load rules from %s: %v", "C:\\Users\\jesse\\dws\\rules.yaml", err)
+	rulesFile := os.Getenv("RULES_FILE")
+	if rulesFile == "" {
+		log.Println("RULES_FILE environment variable not set, not loading rules from file.")
+	} else {
+		log.Printf("Loading rules from %s", rulesFile)
+		if err := engine.LoadRulesFromYAML(rulesFile); err != nil {
+			log.Fatalf("Failed to load rules from %s: %v", rulesFile, err)
+		}
+		log.Println("Rules loaded successfully.")
 	}
-	log.Println("Rules loaded successfully.")
 
 	log.Fatal(run())
 }

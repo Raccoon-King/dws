@@ -87,14 +87,7 @@ func ReloadRulesHandler(w http.ResponseWriter, r *http.Request) {
 		Rules []engine.Rule `json:"rules"`
 	}
 	var req request
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "failed to read request body", http.StatusInternalServerError)
-		return
-	}
-	log.Printf("Received /rules/reload request body: %s", body)
-
-	if err := json.Unmarshal(body, &req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}

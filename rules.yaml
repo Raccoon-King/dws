@@ -1,0 +1,8 @@
+- id: profanity-1
+  pattern: "badword"
+  severity: high
+  description: "Detects common profanity"
+- id: sensitive-phrase-1
+  pattern: "confidential information"
+  severity: medium
+  description: "Detects sensitive phrases"

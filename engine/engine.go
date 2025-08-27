@@ -1,17 +1,21 @@
 package engine
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
+
+	yaml "gopkg.in/yaml.v2"
 )
 
 // Rule defines a pattern that will be searched in text.
 type Rule struct {
-	ID          string `json:"id"`
-	Pattern     string `json:"pattern"`
-	Severity    string `json:"severity"`
-	Description string `json:"description"`
+	ID          string `json:"id" yaml:"id"`
+	Pattern     string `json:"pattern" yaml:"pattern"`
+	Severity    string `json:"severity" yaml:"severity"`
+	Description string `json:"description" yaml:"description"`
+	CompiledPattern *regexp.Regexp `json:"-" yaml:"-"` // Compiled regex for internal use
 }
 
 // Finding represents a rule match inside a document.
@@ -38,39 +42,23 @@ func GetRules() []Rule {
 
 // LoadRulesFromYAML reads rule definitions from a YAML file and replaces the current rule set.
 func LoadRulesFromYAML(path string) error {
-	data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
 	var rules []Rule
-	var r Rule
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		switch {
-		case strings.HasPrefix(line, "- id:"):
-			if r.ID != "" && r.Pattern != "" {
-				rules = append(rules, r)
-				r = Rule{}
-			}
-			r.ID = strings.TrimSpace(strings.TrimPrefix(line, "- id:"))
-		case strings.HasPrefix(line, "id:"):
-			if r.ID != "" && r.Pattern != "" {
-				rules = append(rules, r)
-				r = Rule{}
-			}
-			r.ID = strings.TrimSpace(strings.TrimPrefix(line, "id:"))
-		case strings.HasPrefix(line, "pattern:"):
-			r.Pattern = strings.TrimSpace(strings.TrimPrefix(line, "pattern:"))
-		case strings.HasPrefix(line, "severity:"):
-			r.Severity = strings.TrimSpace(strings.TrimPrefix(line, "severity:"))
-		case strings.HasPrefix(line, "description:"):
-			r.Description = strings.TrimSpace(strings.TrimPrefix(line, "description:"))
+	if err := yaml.Unmarshal(data, &rules); err != nil {
+		return err
+	}
+
+	for i := range rules {
+		compiled, err := regexp.Compile(rules[i].Pattern)
+		if err != nil {
+			return fmt.Errorf("failed to compile regex for rule %s: %w", rules[i].ID, err)
 		}
+		rules[i].CompiledPattern = compiled
 	}
-	if r.ID != "" && r.Pattern != "" {
-		rules = append(rules, r)
-	}
+
 	SetRules(rules)
 	return nil
 }
@@ -81,11 +69,7 @@ func Evaluate(text, fileID string, rules []Rule) []Finding {
 	lines := strings.Split(text, "\n")
 	for i, line := range lines {
 		for _, rule := range rules {
-			re, err := regexp.Compile(rule.Pattern)
-			if err != nil {
-				continue
-			}
-			if re.MatchString(line) {
+						if rule.CompiledPattern != nil && rule.CompiledPattern.MatchString(line) {
 				findings = append(findings, Finding{
 					FileID:      fileID,
 					RuleID:      rule.ID,

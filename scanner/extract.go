@@ -21,7 +21,7 @@ func ExtractText(data []byte, filename string) (string, error) {
 	case ".html", ".htm":
 		re := regexp.MustCompile("<[^>]+>")
 		return re.ReplaceAllString(string(data), " "), nil
-	case ".yaml", ".yml", ".txt":
+		case ".yaml", ".yml", ".txt", ".json", ".xml":
 		return string(data), nil
 	default:
 		return "", fmt.Errorf("unsupported file type: %s", ext)

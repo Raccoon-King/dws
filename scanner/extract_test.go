@@ -32,6 +32,22 @@ func TestExtractTextYAML(t *testing.T) {
 	}
 }
 
+func TestExtractTextJSON(t *testing.T) {
+	data := []byte(`{"key": "value"}`)
+	txt, err := ExtractText(data, "file.json")
+	if err != nil || txt != `{"key": "value"}` {
+		t.Fatalf("unexpected: %v %q", err, txt)
+	}
+}
+
+func TestExtractTextXML(t *testing.T) {
+	data := []byte("<root><item>data</item></root>")
+	txt, err := ExtractText(data, "file.xml")
+	if err != nil || txt != "<root><item>data</item></root>" {
+		t.Fatalf("unexpected: %v %q", err, txt)
+	}
+}
+
 func TestExtractTextUnsupported(t *testing.T) {
 	if _, err := ExtractText([]byte(""), "file.bin"); err == nil {
 		t.Fatalf("expected error")

@@ -6,7 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"regexp"
 	"testing"
 
 	"dws/engine"
@@ -22,8 +22,27 @@ func createMultipart(body *bytes.Buffer, filename, content string) *http.Request
 	return req
 }
 
+func createTestRules(t *testing.T, rules []engine.Rule) []engine.Rule {
+	compiledRules := make([]engine.Rule, len(rules))
+	for i, r := range rules {
+		compiled, err := regexp.Compile(r.Pattern)
+		if err != nil {
+			t.Fatalf("failed to compile regex for rule %s: %v", r.ID, err)
+		}
+		compiledRules[i] = engine.Rule{
+			ID:              r.ID,
+			Pattern:         r.Pattern,
+			Severity:        r.Severity,
+			Description:     r.Description,
+			CompiledPattern: compiled,
+		}
+	}
+	return compiledRules
+}
+
 func TestScanHandler(t *testing.T) {
-	engine.SetRules([]engine.Rule{{ID: "1", Pattern: "foo", Severity: "low"}})
+	rules := createTestRules(t, []engine.Rule{{ID: "1", Pattern: "foo", Severity: "low"}})
+	engine.SetRules(rules)
 	var b bytes.Buffer
 	req := createMultipart(&b, "test.txt", "foo")
 	w := httptest.NewRecorder()
@@ -53,7 +72,8 @@ func TestScanHandlerUnsupported(t *testing.T) {
 }
 
 func TestReportHandler(t *testing.T) {
-	engine.SetRules([]engine.Rule{{ID: "1", Pattern: "foo", Severity: "low", Description: "contains foo"}})
+	rules := createTestRules(t, []engine.Rule{{ID: "1", Pattern: "foo", Severity: "low", Description: "contains foo"}})
+	engine.SetRules(rules)
 	var b bytes.Buffer
 	req := createMultipart(&b, "test.txt", "foo")
 	req.URL.Path = "/report"
@@ -108,19 +128,18 @@ func TestReloadRulesHandlerBadJSON(t *testing.T) {
 }
 
 func TestLoadRulesFromFileHandler(t *testing.T) {
-	yaml := "rules:\n- id: r1\n  pattern: foo\n  severity: high\n"
-	f, _ := os.CreateTemp(t.TempDir(), "r*.yaml")
-	f.WriteString(yaml)
-	f.Close()
-	body, _ := json.Marshal(map[string]string{"path": f.Name()})
+	// Use the rules.yaml file created in the root directory for testing
+	path := "C:\\Users\\jesse\\dws\\rules.yaml"
+
+	body, _ := json.Marshal(map[string]string{"path": path})
 	req := httptest.NewRequest(http.MethodPost, "/rules/load", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	LoadRulesFromFileHandler(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	if len(engine.GetRules()) != 1 {
-		t.Fatalf("rules not loaded")
+	if len(engine.GetRules()) != 2 { // Expect 2 rules from rules.yaml
+		t.Fatalf("expected 2 rules, got %d", len(engine.GetRules()))
 	}
 }
 

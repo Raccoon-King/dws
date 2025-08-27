@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"regexp"
 	"testing"
 
@@ -128,18 +129,39 @@ func TestReloadRulesHandlerBadJSON(t *testing.T) {
 }
 
 func TestLoadRulesFromFileHandler(t *testing.T) {
-	// Use the rules.yaml file created in the root directory for testing
-	path := "C:\\Users\\jesse\\dws\\rules.yaml"
+	// Create a temporary rules file for testing
+	rulesContent := `rules:
+- id: profanity-1
+  pattern: badword
+  severity: high
+  description: Detects common profanity
+- id: sensitive-phrase-1
+  pattern: confidential information
+  severity: medium
+  description: Detects sensitive phrases
+`
+	tmpFile := t.TempDir() + "/rules.yaml"
+	if err := os.WriteFile(tmpFile, []byte(rulesContent), 0644); err != nil {
+		t.Fatalf("failed to create temp rules file: %v", err)
+	}
 
-	body, _ := json.Marshal(map[string]string{"path": path})
+	body, _ := json.Marshal(map[string]string{"path": tmpFile})
 	req := httptest.NewRequest(http.MethodPost, "/rules/load", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	LoadRulesFromFileHandler(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	if len(engine.GetRules()) != 2 { // Expect 2 rules from rules.yaml
-		t.Fatalf("expected 2 rules, got %d", len(engine.GetRules()))
+	// Verify the rules loaded from the temporary file
+	rules := engine.GetRules()
+	if len(rules) != 2 {
+		t.Fatalf("expected 2 rules, got %d", len(rules))
+	}
+	if rules[0].ID != "profanity-1" || rules[0].Pattern != "badword" || rules[0].Severity != "high" || rules[0].Description != "Detects common profanity" {
+		t.Fatalf("unexpected first rule: %+v", rules[0])
+	}
+	if rules[1].ID != "sensitive-phrase-1" || rules[1].Pattern != "confidential information" || rules[1].Severity != "medium" || rules[1].Description != "Detects sensitive phrases" {
+		t.Fatalf("unexpected second rule: %+v", rules[1])
 	}
 }
 

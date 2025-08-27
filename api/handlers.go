@@ -90,7 +90,6 @@ func ReloadRulesHandler(w http.ResponseWriter, r *http.Request) {
 		req.Rules[i].CompiledPattern = compiled
 	}
 
-	log.Printf("API_DEBUG: Calling engine.SetRules with %d rules. First rule CompiledPattern is nil: %t", len(req.Rules), req.Rules[0].CompiledPattern == nil)
 	engine.SetRules(req.Rules)
 	w.WriteHeader(http.StatusOK)
 }

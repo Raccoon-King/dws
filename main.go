@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"dws/api"
+	"dws/engine"
 )
 
 var debugMode bool
@@ -32,7 +33,7 @@ func initLogging() {
 	log.Printf("DEBUG_MODE: %t", debugMode)
 }
 
-func newServer() (*http.Server, error) {
+func NewServer() (*http.Server, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/scan", api.ScanHandler)
 	mux.HandleFunc("/process-document", api.ProcessDocumentHandler)
@@ -43,9 +44,15 @@ func newServer() (*http.Server, error) {
 }
 
 func run() error {
-	srv, err := newServer()
+	srv, err := NewServer()
 	if err != nil {
 		return err
 	}
 	return srv.ListenAndServe()
+}
+
+func main() {
+	initLogging()
+	engine.SetDebugMode(debugMode)
+	log.Fatal(run())
 }

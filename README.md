@@ -165,3 +165,7 @@ spec:
 ```
 
 Deploy a separate pod with a different ConfigMap for each rule set.
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.

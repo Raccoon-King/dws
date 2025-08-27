@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"fmt"
-	"log"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -29,6 +28,5 @@ func ExtractText(data []byte, filename string) (string, error) {
 		return "", fmt.Errorf("unsupported file type: %s", ext)
 	}
 
-	log.Printf("SCANNER_DEBUG: Extracted text for %s (len %d): \"%s\"", filename, len(extractedText), extractedText)
 	return extractedText, nil
 }

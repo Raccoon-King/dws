@@ -41,12 +41,6 @@ var currentRules []Rule
 
 // SetRules replaces the in-memory rule set.
 func SetRules(rules []Rule) {
-	if debugMode {
-		log.Printf("ENGINE_DEBUG: SetRules called with %d rules.", len(rules))
-		for _, rule := range rules {
-			log.Printf("ENGINE_DEBUG:   Rule ID: %s, Pattern: %s, CompiledPattern is nil: %t", rule.ID, rule.Pattern, rule.CompiledPattern == nil)
-		}
-	}
 	currentRules = rules
 }
 
@@ -102,16 +96,10 @@ func Evaluate(text, fileID string, rules []Rule) []Finding {
 				}
 				continue // Skip this rule if pattern is nil
 			}
-			// TEMPORARY DEBUGGING: Recompile pattern just before use
-			compiledTemp, errTemp := regexp.Compile(".*" + rule.Pattern + ".*")
-			if errTemp != nil {
-				log.Printf("ENGINE_DEBUG: ERROR recompiling pattern %s: %v", rule.Pattern, errTemp)
-				continue
-			}
 			if debugMode {
-				log.Printf("ENGINE_DEBUG:   Attempting MatchString for rule %s on line: %s (using recompiled pattern)", rule.ID, line)
+				log.Printf("ENGINE_DEBUG:   Attempting MatchString for rule %s on line: %s", rule.ID, line)
 			}
-			if compiledTemp.MatchString(line) {
+			if rule.CompiledPattern.MatchString(line) {
 				if debugMode {
 					log.Printf("ENGINE_DEBUG:     MATCH FOUND for rule %s on line %d", rule.ID, i+1)
 				}

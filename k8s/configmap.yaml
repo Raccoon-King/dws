@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dws-config
+  namespace: dws
+  labels:
+    app: dws
+data:
+  RULES_FILE: "rules.yaml"
+  LOGGING: "stdout"
+  DEBUG: "false"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dws-rules
+  namespace: dws
+  labels:
+    app: dws
+data:
+  rules.yaml: |
+    rules:
+    - id: r1
+      pattern: foo
+      severity: high
+      description: "Test rule for pattern matching"
+    - id: r2  
+      pattern: sensitive
+      severity: critical
+      description: "Detects sensitive information"
+  rules.json: |
+    {
+      "rules": [
+        {
+          "id": "r1",
+          "pattern": "foo",
+          "severity": "high",
+          "description": "Test rule for pattern matching"
+        },
+        {
+          "id": "r2",
+          "pattern": "sensitive", 
+          "severity": "critical",
+          "description": "Detects sensitive information"
+        }
+      ]
+    }

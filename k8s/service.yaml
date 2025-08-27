@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dws-service
+  namespace: dws
+  labels:
+    app: dws
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+    protocol: TCP
+  selector:
+    app: dws
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dws-loadbalancer
+  namespace: dws
+  labels:
+    app: dws
+    service-type: loadbalancer
+spec:
+  type: LoadBalancer
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: http
+    protocol: TCP
+  selector:
+    app: dws

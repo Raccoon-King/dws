@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -10,6 +11,7 @@ import (
 // ExtractText converts various document formats into plain text.
 func ExtractText(data []byte, filename string) (string, error) {
 	ext := strings.ToLower(filepath.Ext(filename))
+	var extractedText string
 	switch ext {
 	case ".pdf":
 		var sb strings.Builder
@@ -17,13 +19,16 @@ func ExtractText(data []byte, filename string) (string, error) {
 		for _, m := range re.FindAllSubmatch(data, -1) {
 			sb.Write(m[1])
 		}
-		return sb.String(), nil
+		extractedText = sb.String()
 	case ".html", ".htm":
 		re := regexp.MustCompile("<[^>]+>")
-		return re.ReplaceAllString(string(data), " "), nil
+		extractedText = re.ReplaceAllString(string(data), " ")
 		case ".yaml", ".yml", ".txt", ".json", ".xml":
-		return string(data), nil
+		extractedText = string(data)
 	default:
 		return "", fmt.Errorf("unsupported file type: %s", ext)
 	}
+
+	log.Printf("SCANNER_DEBUG: Extracted text for %s (len %d): \"%s\"", filename, len(extractedText), extractedText)
+	return extractedText, nil
 }

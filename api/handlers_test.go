@@ -78,7 +78,7 @@ func TestReportHandler(t *testing.T) {
 	req := createMultipart(&b, "test.txt", "foo")
 	req.URL.Path = "/report"
 	w := httptest.NewRecorder()
-	ReportHandler(w, req)
+	ProcessDocumentHandler(w, req) // Changed ReportHandler to ProcessDocumentHandler
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}

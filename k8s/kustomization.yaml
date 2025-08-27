@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: dws-kustomization
+
+namespace: dws
+
+resources:
+- namespace.yaml
+- configmap.yaml
+- deployment.yaml
+- service.yaml
+- ingress.yaml
+- hpa.yaml
+
+commonLabels:
+  app: dws
+  environment: production
+
+images:
+- name: dws
+  newTag: latest
+
+replicas:
+- name: dws-deployment
+  count: 3
+
+patchesStrategicMerge:
+- deployment-patches.yaml
+
+configMapGenerator:
+- name: dws-environment-config
+  literals:
+  - ENVIRONMENT=production
+  - LOG_LEVEL=info

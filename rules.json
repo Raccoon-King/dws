@@ -1,0 +1,10 @@
+{
+  "rules": [
+    {
+      "ID": "test-rule-1",
+      "Pattern": "test content",
+      "Category": "Test",
+      "Description": "A test rule"
+    }
+  ]
+}

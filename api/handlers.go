@@ -1,90 +1,21 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 
 	"dws/engine"
 	"dws/scanner"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/s3"
 )
 
-// S3Event represents a simplified S3 event notification structure.
-type S3Event struct {
-	Records []struct {
-		S3 struct {
-			Bucket struct {
-				Name string `json:"name"`
-			}
-			Object struct {
-				Key string `json:"key"`
-			}
-		}
-	} `json:"Records"`
+type report struct {
+	FileID   string          `json:"fileID"`
+	Findings []engine.Finding `json:"findings"`
 }
-
-type S3Client interface {
-	GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (*s3.GetObjectOutput, error)
-}
-
-// S3EventHandler processes S3 event notifications.
-func S3EventHandler(s3Svc S3Client) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var event S3Event
-		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-			http.Error(w, "invalid S3 event payload", http.StatusBadRequest)
-			log.Printf("Error decoding S3 event: %v", err)
-			return
-		}
-
-		for _, record := range event.Records {
-			bucketName := record.S3.Bucket.Name
-			objectKey := record.S3.Object.Key
-			log.Printf("Received S3 event for bucket: %s, key: %s", bucketName, objectKey)
-
-			// Download the object from S3
-			input := &s3.GetObjectInput{
-				Bucket: aws.String(bucketName),
-				Key:    aws.String(objectKey),
-			}
-
-			result, err := s3Svc.GetObjectWithContext(context.Background(), input)
-			if err != nil {
-				log.Printf("Error getting object %s from bucket %s: %v", objectKey, bucketName, err)
-				continue // Continue to next record if there's an error with this one
-			}
-			defer result.Body.Close()
-
-			data, err := io.ReadAll(result.Body)
-			if err != nil {
-				log.Printf("Error reading object body: %v", err)
-				continue
-			}
-
-			// Extract text and evaluate
-			text, err := scanner.ExtractText(data, objectKey)
-			if err != nil {
-				log.Printf("Error extracting text from %s: %v", objectKey, err)
-				continue
-			}
-
-			findings := engine.Evaluate(text, objectKey, engine.GetRules())
-			log.Printf("Findings for %s: %+v", objectKey, findings)
-
-			// TODO: Store findings in MySQL (Task 2.3)
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}
-}
-
-// ScanHandler ingests a document file and returns findings.
 func ScanHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		http.Error(w, "invalid multipart", http.StatusBadRequest)
@@ -111,8 +42,8 @@ func ScanHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(findings)
 }
 
-// ReportHandler scans a document and wraps findings in a report structure.
-func ReportHandler(w http.ResponseWriter, r *http.Request) {
+// ProcessDocumentHandler accepts a document, scans it, and returns findings in a report structure.
+func ProcessDocumentHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		http.Error(w, "invalid multipart", http.StatusBadRequest)
 		return
@@ -149,6 +80,17 @@ func ReloadRulesHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
+
+	for i := range req.Rules {
+		compiled, err := regexp.Compile(".*" + req.Rules[i].Pattern + ".*")
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to compile regex for rule %s: %v", req.Rules[i].ID, err), http.StatusBadRequest)
+			return
+		}
+		req.Rules[i].CompiledPattern = compiled
+	}
+
+	log.Printf("API_DEBUG: Calling engine.SetRules with %d rules. First rule CompiledPattern is nil: %t", len(req.Rules), req.Rules[0].CompiledPattern == nil)
 	engine.SetRules(req.Rules)
 	w.WriteHeader(http.StatusOK)
 }

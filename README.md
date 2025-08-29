@@ -10,10 +10,14 @@ Run tests:
 go test ./... -cover
 ```
 
+## Deployment
+
+For detailed deployment instructions, see the [Deployment Guide](DEPLOYMENT.md).
+
 ## API
 
 ### `POST /scan`
-Upload a document to be scanned.
+Upload a document to be scanned and receive a structured report of findings including rule descriptions.
 
 **Request** – `multipart/form-data`
 
@@ -21,19 +25,21 @@ Upload a document to be scanned.
 |------|------|-------------|
 | `file` | file | Document to scan. Supports `.pdf`, `.html`, `.txt`, `.yaml`, `.yml` |
 
-**Response** – array of findings
+**Response**
 
 ```json
-[
-  {
-    "file_id": "uploaded-filename",
-    "rule_id": "rule-1",
-    "severity": "high",
-    "line": 3,
-    "context": "line containing match",
-    "description": "rule description"
-  }
-]
+{
+  "file_id": "uploaded-filename",
+  "findings": [
+    {
+      "rule_id": "rule-1",
+      "severity": "high",
+      "line": 3,
+      "context": "line containing match",
+      "description": "rule description"
+    }
+  ]
+}
 ```
 
 ### `POST /rules/reload`
@@ -62,38 +68,85 @@ Load rules from a YAML file on disk.
 **Response**
 - `200 OK` on success
 
-### `POST /report`
-Upload a document and receive a structured report of findings including rule descriptions.
-
-**Request** – `multipart/form-data`
-
-| Field | Type | Description |
-|------|------|-------------|
-| `file` | file | Document to scan |
-
-**Response**
-
-```json
-{
-  "file_id": "uploaded-filename",
-  "findings": [
-    {
-      "rule_id": "rule-1",
-      "severity": "high",
-      "line": 3,
-      "context": "line containing match",
-      "description": "rule description"
-    }
-  ]
-}
-```
-
 ### `GET /health`
 Health check endpoint.
 
 **Response**
 ```json
 { "status": "ok" }
+```
+
+### `GET /docs`
+Returns a JSON array of all available endpoints and their documentation.
+
+**Response**
+
+```json
+[
+  {
+    "path": "/scan",
+    "method": "POST",
+    "description": "Upload a document to be scanned and receive a structured report of findings including rule descriptions.",
+    "data_shapes": [
+      {
+        "name": "Request",
+        "description": "multipart/form-data",
+        "shape": "{\"file\": \"<file>\"}"
+      },
+      {
+        "name": "Response",
+        "description": "A structured report of findings.",
+        "shape": "{\"file_id\":\"uploaded-filename\",\"findings\":[{\"rule_id\":\"rule-1\",\"severity\":\"high\",\"line\":3,\"context\":\"line containing match\",\"description\":\"rule description\"}]}"
+      }
+    ],
+    "curl_example": "curl -X POST -F 'file=@/path/to/your/file.pdf' http://localhost:8080/scan"
+  },
+  {
+    "path": "/rules/reload",
+    "method": "POST",
+    "description": "Replace the existing rules with a new set.",
+    "data_shapes": [
+      {
+        "name": "Request",
+        "description": "A JSON object containing the new rules.",
+        "shape": "{\"rules\":[{\"id\":\"rule-1\",\"pattern\":\"secret\",\"severity\":\"high\"}]}"
+      }
+    ],
+    "curl_example": "curl -X POST -H \"Content-Type: application/json\" -d '{\"rules\":[{\"id\":\"rule-1\",\"pattern\":\"secret\",\"severity\":\"high\"}]}' http://localhost:8080/rules/reload"
+  },
+  {
+    "path": "/rules/load",
+    "method": "POST",
+    "description": "Load rules from a YAML file on disk.",
+    "data_shapes": [
+      {
+        "name": "Request",
+        "description": "A JSON object containing the path to the rules file.",
+        "shape": "{\"path\":\"/etc/dws/rules.yaml\"}"
+      }
+    ],
+    "curl_example": "curl -X POST -H \"Content-Type: application/json\" -d '{\"path\":\"/etc/dws/rules.yaml\"}' http://localhost:8080/rules/load"
+  },
+  {
+    "path": "/health",
+    "method": "GET",
+    "description": "Health check endpoint.",
+    "data_shapes": [
+      {
+        "name": "Response",
+        "description": "A JSON object indicating the status of the service.",
+        "shape": "{\"status\":\"ok\"}"
+      }
+    ],
+    "curl_example": "curl http://localhost:8080/health"
+  },
+  {
+    "path": "/docs",
+    "method": "GET",
+    "description": "Returns a JSON array of all available endpoints and their documentation.",
+    "curl_example": "curl http://localhost:8080/docs"
+  }
+]
 ```
 
 ## Data Structures

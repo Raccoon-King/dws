@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"os"
 	"regexp"
 	"testing"
 )
@@ -40,10 +41,23 @@ func TestEvaluateBadRegex(t *testing.T) {
 }
 
 func TestLoadRulesFromYAML(t *testing.T) {
-	// Use the rules.yaml file created in the root directory for testing
-	path := "C:\\Users\\jesse\\dws\\rules.yaml"
+	// Create a temporary test rules file
+	rulesContent := `rules:
+- id: profanity-1
+  pattern: badword
+  severity: high
+  description: Detects common profanity
+- id: sensitive-phrase-1
+  pattern: confidential information
+  severity: medium
+  description: Detects sensitive phrases
+`
+	tmpFile := t.TempDir() + "/test_rules.yaml"
+	if err := os.WriteFile(tmpFile, []byte(rulesContent), 0644); err != nil {
+		t.Fatalf("failed to create temp rules file: %v", err)
+	}
 
-	if err := LoadRulesFromYAML(path); err != nil {
+	if err := LoadRulesFromYAML(tmpFile); err != nil {
 		t.Fatalf("load: %v", err)
 	}
 	rules := GetRules()

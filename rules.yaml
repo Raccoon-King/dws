@@ -68,3 +68,8 @@ rules:
     pattern: "\\bvermon\\b"
     severity: informational
     description: "Flags likely misspelling of 'vermin' as 'vermon'."
+
+  - id: raccoon-mention
+    pattern: "\\b(raccoon[s]?)\\b"
+    severity: informational
+    description: "Mentions of raccoons."

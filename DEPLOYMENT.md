@@ -49,7 +49,7 @@ docker-compose logs -f dws
 docker-compose down
 ```
 
-curl -X POST -F "file=@C:/Users/jesse/grabby-playbook-2/src/data/FHSAA Clarification Of The Onside Conversion Play.pdf" http://localhost:8080/scan
+curl -X POST -F "file=@/path/to/your/document.pdf" http://localhost:8080/scan
 
 ## Kubernetes
 

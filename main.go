@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -33,18 +34,35 @@ func initLogging() {
 	log.Printf("DEBUG_MODE: %t", debugMode)
 }
 
-func NewServer() (*http.Server, error) {
+func NewServer(rulesFile string) (*http.Server, error) {
+	if rulesFile != "" {
+		if err := engine.LoadRulesFromYAML(rulesFile); err != nil {
+			return nil, fmt.Errorf("failed to load rules from %s: %w", rulesFile, err)
+		}
+	}
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Default port to match Docker/K8s configs
+	}
+	
 	mux := http.NewServeMux()
 	mux.HandleFunc("/scan", api.ScanHandler)
-	mux.HandleFunc("/process-document", api.ProcessDocumentHandler)
 	mux.HandleFunc("/rules/reload", api.ReloadRulesHandler)
 	mux.HandleFunc("/rules/load", api.LoadRulesFromFileHandler)
 	mux.HandleFunc("/health", api.HealthHandler)
-	return &http.Server{Addr: ":8081", Handler: mux}, nil
+	mux.HandleFunc("/docs", api.DocsHandler)
+	return &http.Server{Addr: ":" + port, Handler: mux}, nil
 }
 
+
+
 func run() error {
-	srv, err := NewServer()
+	rulesFile := os.Getenv("RULES_FILE")
+	if rulesFile == "" {
+		rulesFile = "rules.yaml" // Default rules file
+	}
+	api.SetRulesFile(rulesFile)
+	srv, err := NewServer(rulesFile)
 	if err != nil {
 		return err
 	}
@@ -55,11 +73,7 @@ func main() {
 	initLogging()
 	engine.SetDebugMode(debugMode)
 
-	log.Printf("Loading rules from %s", "C:\\Users\\jesse\\dws\\rules_json_test.yaml")
-	if err := engine.LoadRulesFromYAML("C:\\Users\\jesse\\dws\\rules_json_test.yaml"); err != nil {
-		log.Fatalf("Failed to load rules from %s: %v", "C:\\Users\\jesse\\dws\\rules_json_test.yaml", err)
+	if err := run(); err != nil {
+		log.Fatal(err)
 	}
-	log.Println("Rules loaded successfully.")
-
-	log.Fatal(run())
 }

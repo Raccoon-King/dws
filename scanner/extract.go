@@ -36,8 +36,12 @@ func ExtractText(data []byte, filename string) (string, error) {
 		}
 		extractedText = sb.String()
 	case ".html", ".htm":
-		re := regexp.MustCompile("<[^>]+>")
-		extractedText = re.ReplaceAllString(string(data), " ")
+		// First, remove <script> and <style> blocks
+		re := regexp.MustCompile("(?s)<(script|style)>.*?</(script|style)>")
+		cleaned := re.ReplaceAllString(string(data), " ")
+		// Then, remove all other tags
+		re = regexp.MustCompile("<[^>]+>")
+		extractedText = re.ReplaceAllString(cleaned, " ")
 		case ".yaml", ".yml", ".txt", ".json", ".xml":
 		extractedText = string(data)
 	default:

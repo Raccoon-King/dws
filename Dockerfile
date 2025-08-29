@@ -1,4 +1,5 @@
 # Build stage
+# NOTE: For air-gapped environments, use Dockerfile.airgapped instead
 FROM golang:1.20-alpine AS builder
 
 WORKDIR /app
@@ -38,10 +39,11 @@ EXPOSE 8080
 # Set environment variables
 ENV RULES_FILE=rules.yaml
 ENV LOGGING=stdout
+ENV PORT=8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-8080}/health || exit 1
 
 # Run the application
 CMD ["./dws"]

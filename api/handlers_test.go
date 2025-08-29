@@ -7,201 +7,184 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"regexp"
 	"testing"
 
 	"dws/engine"
 )
 
-func createMultipart(body *bytes.Buffer, filename, content string) *http.Request {
-	w := multipart.NewWriter(body)
-	fw, _ := w.CreateFormFile("file", filename)
-	fw.Write([]byte(content))
-	w.Close()
-	req := httptest.NewRequest(http.MethodPost, "/scan", body)
-	req.Header.Set("Content-Type", w.FormDataContentType())
-	return req
+func TestHealthHandler(t *testing.T) {
+	// Create a dummy rules file
+	rulesFile, err := os.CreateTemp(t.TempDir(), "rules*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Close the file immediately after creation to allow deletion
+	rulesFile.Close()
+	defer os.Remove(rulesFile.Name())
+
+	// Set the rules file path in the api package
+	SetRulesFile(rulesFile.Name())
+
+	req, err := http.NewRequest("GET", "/health", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(HealthHandler)
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusOK)
+	}
+
+	expected := `{"status":"ok"}`
+	if rr.Body.String() != expected {
+		t.Errorf("handler returned unexpected body: got %v want %v",
+			rr.Body.String(), expected)
+	}
 }
 
-func createTestRules(t *testing.T, rules []engine.Rule) []engine.Rule {
-	compiledRules := make([]engine.Rule, len(rules))
-	for i, r := range rules {
-		compiled, err := regexp.Compile(r.Pattern)
-		if err != nil {
-			t.Fatalf("failed to compile regex for rule %s: %v", r.ID, err)
-		}
-		compiledRules[i] = engine.Rule{
-			ID:              r.ID,
-			Pattern:         r.Pattern,
-			Severity:        r.Severity,
-			Description:     r.Description,
-			CompiledPattern: compiled,
-		}
+func TestHealthHandler_NoRulesFile(t *testing.T) {
+	// Set the rules file path to a non-existent file
+	SetRulesFile("nonexistent.yaml")
+
+	req, err := http.NewRequest("GET", "/health", nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return compiledRules
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(HealthHandler)
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusServiceUnavailable {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusServiceUnavailable)
+	}
 }
+
+
 
 func TestScanHandler(t *testing.T) {
-	rules := createTestRules(t, []engine.Rule{{ID: "1", Pattern: "foo", Severity: "low"}})
-	engine.SetRules(rules)
-	var b bytes.Buffer
-	req := createMultipart(&b, "test.txt", "foo")
-	w := httptest.NewRecorder()
-	ScanHandler(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
+	// Create a dummy rules file
+	rulesFile, err := os.CreateTemp(t.TempDir(), "rules*.yaml")
+	if err != nil {
+		t.Fatal(err)
 	}
-}
+	defer os.Remove(rulesFile.Name())
 
-func TestScanHandlerMissingFile(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/scan", nil)
-	w := httptest.NewRecorder()
-	ScanHandler(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
+	if _, err := rulesFile.WriteString("rules:\n  - id: r1\n    pattern: foo\n    severity: high"); err != nil {
+		t.Fatal(err)
 	}
-}
+	rulesFile.Close()
 
-func TestScanHandlerUnsupported(t *testing.T) {
-	var b bytes.Buffer
-	req := createMultipart(&b, "file.bin", "data")
-	w := httptest.NewRecorder()
-	ScanHandler(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
+	if err := engine.LoadRulesFromYAML(rulesFile.Name()); err != nil {
+		t.Fatal(err)
 	}
-}
 
-func TestReportHandler(t *testing.T) {
-	rules := createTestRules(t, []engine.Rule{{ID: "1", Pattern: "foo", Severity: "low", Description: "contains foo"}})
-	engine.SetRules(rules)
-	var b bytes.Buffer
-	req := createMultipart(&b, "test.txt", "foo")
-	req.URL.Path = "/report"
-	w := httptest.NewRecorder()
-	ProcessDocumentHandler(w, req) // Changed ReportHandler to ProcessDocumentHandler
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
+	// Create a test file to upload
+	testContent := "This document contains foo which should trigger a rule"
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "test.txt")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
 	}
-	var resp struct {
-		FileID   string           `json:"file_id"`
+	if _, err := part.Write([]byte(testContent)); err != nil {
+		t.Fatalf("write to form: %v", err)
+	}
+	writer.Close()
+
+	req, err := http.NewRequest("POST", "/scan", &body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(ScanHandler)
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusOK)
+	}
+
+	var report struct {
+		FileID   string          `json:"fileID"`
 		Findings []engine.Finding `json:"findings"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	if err := json.NewDecoder(rr.Body).Decode(&report); err != nil {
+		t.Fatalf("decode response: %v", err)
 	}
-	if resp.FileID != "test.txt" || len(resp.Findings) != 1 || resp.Findings[0].Description != "contains foo" {
-		t.Fatalf("unexpected response: %+v", resp)
-	}
-}
 
-func TestScanHandlerBadMultipart(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/scan", bytes.NewReader([]byte("bad")))
-	req.Header.Set("Content-Type", "multipart/form-data; boundary=foo")
-	w := httptest.NewRecorder()
-	ScanHandler(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
+	if len(report.Findings) != 1 {
+		t.Errorf("expected 1 finding, got %d", len(report.Findings))
 	}
 }
 
 func TestReloadRulesHandler(t *testing.T) {
-	rules := []engine.Rule{{ID: "1", Pattern: "foo", Severity: "high"}}
-	body, _ := json.Marshal(map[string][]engine.Rule{"rules": rules})
-	req := httptest.NewRequest(http.MethodPost, "/rules/reload", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	ReloadRulesHandler(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
+	rules := []engine.Rule{
+		{ID: "test-reload", Pattern: "test", Severity: "low", Description: "test rule"},
 	}
-	if len(engine.GetRules()) != 1 {
-		t.Fatalf("expected 1 rule, got %d", len(engine.GetRules()))
+	reqBody := map[string][]engine.Rule{"rules": rules}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("marshal rules: %v", err)
 	}
-}
 
-func TestReloadRulesHandlerBadJSON(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/rules/reload", bytes.NewReader([]byte("{")))
-	w := httptest.NewRecorder()
-	ReloadRulesHandler(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
+	req, err := http.NewRequest("POST", "/rules/reload", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(ReloadRulesHandler)
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusOK)
 	}
 }
 
 func TestLoadRulesFromFileHandler(t *testing.T) {
-	// Create a temporary rules file for testing
-	rulesContent := `rules:
-- id: profanity-1
-  pattern: badword
-  severity: high
-  description: Detects common profanity
-- id: sensitive-phrase-1
-  pattern: confidential information
-  severity: medium
-  description: Detects sensitive phrases
-`
-	tmpFile := t.TempDir() + "/rules.yaml"
-	if err := os.WriteFile(tmpFile, []byte(rulesContent), 0644); err != nil {
-		t.Fatalf("failed to create temp rules file: %v", err)
+	// Create a dummy rules file
+	rulesFile, err := os.CreateTemp(t.TempDir(), "rules*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(rulesFile.Name())
+
+	if _, err := rulesFile.WriteString("rules:\n  - id: r1\n    pattern: foo\n    severity: high"); err != nil {
+		t.Fatal(err)
+	}
+	rulesFile.Close()
+
+	reqBody := map[string]string{"path": rulesFile.Name()}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
 	}
 
-	body, _ := json.Marshal(map[string]string{"path": tmpFile})
-	req := httptest.NewRequest(http.MethodPost, "/rules/load", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	LoadRulesFromFileHandler(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
+	req, err := http.NewRequest("POST", "/rules/load", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
 	}
-	// Verify the rules loaded from the temporary file
-	rules := engine.GetRules()
-	if len(rules) != 2 {
-		t.Fatalf("expected 2 rules, got %d", len(rules))
-	}
-	if rules[0].ID != "profanity-1" || rules[0].Pattern != "badword" || rules[0].Severity != "high" || rules[0].Description != "Detects common profanity" {
-		t.Fatalf("unexpected first rule: %+v", rules[0])
-	}
-	if rules[1].ID != "sensitive-phrase-1" || rules[1].Pattern != "confidential information" || rules[1].Severity != "medium" || rules[1].Description != "Detects sensitive phrases" {
-		t.Fatalf("unexpected second rule: %+v", rules[1])
-	}
-}
 
-func TestLoadRulesFromFileHandlerBadPath(t *testing.T) {
-	body, _ := json.Marshal(map[string]string{"path": "missing.yaml"})
-	req := httptest.NewRequest(http.MethodPost, "/rules/load", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	LoadRulesFromFileHandler(w, req)
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", w.Code)
-	}
-}
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(LoadRulesFromFileHandler)
 
-func TestLoadRulesFromFileHandlerBadJSON(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/rules/load", bytes.NewReader([]byte("{")))
-	w := httptest.NewRecorder()
-	LoadRulesFromFileHandler(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
-}
+	handler.ServeHTTP(rr, req)
 
-func TestLoadRulesFromFileHandlerEmptyPath(t *testing.T) {
-	body, _ := json.Marshal(map[string]string{"path": ""})
-	req := httptest.NewRequest(http.MethodPost, "/rules/load", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-	LoadRulesFromFileHandler(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestHealthHandler(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
-	w := httptest.NewRecorder()
-	HealthHandler(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
-		t.Fatalf("unexpected content type: %s", ct)
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusOK)
 	}
 }

@@ -5,12 +5,21 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+
+	"dws/api"
 )
 
 // CreateRulesFile writes a minimal rules.yaml and returns its path.
-func CreateRulesFile(t *testing.T) string {
+func CreateRulesFile(t testing.TB) string {
 	t.Helper()
-	yamlContent := "rules:\n- id: r1\n  pattern: foo\n  severity: high\n"
+	yamlContent := `rules:
+- id: r1
+  pattern: foo
+  severity: high
+- id: raccoon-mention
+  pattern: "\\b(raccoon[s]?)\\b"
+  severity: informational
+`
 	f, err := os.CreateTemp(t.TempDir(), "rules*.yaml")
 	if err != nil {
 		t.Fatalf("temp file: %v", err)
@@ -26,7 +35,8 @@ func TestNewServer(t *testing.T) {
 	path := CreateRulesFile(t)
 	os.Setenv("RULES_FILE", path)
 	defer os.Unsetenv("RULES_FILE")
-	srv, err := NewServer()
+	api.SetRulesFile(path)
+	srv, err := NewServer(path)
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
@@ -38,10 +48,17 @@ func TestNewServer(t *testing.T) {
 	}
 }
 
-func TestNewServerMissingRules(t *testing.T) {
-	os.Setenv("RULES_FILE", "missing.yaml")
+func TestLoadRules(t *testing.T) {
+	// Test with a valid rules file
+	path := CreateRulesFile(t)
+	os.Setenv("RULES_FILE", path)
 	defer os.Unsetenv("RULES_FILE")
-	if _, err := NewServer(); err == nil {
+	if _, err := NewServer(path); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Test with a missing rules file
+	if _, err := NewServer("missing.yaml"); err == nil {
 		t.Fatalf("expected error for missing rules file")
 	}
 }

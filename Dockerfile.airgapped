@@ -1,0 +1,41 @@
+# Dockerfile.airgapped - For air-gapped environments
+# This version avoids any external network calls during build
+
+# Build stage
+FROM golang:1.20-alpine AS builder
+
+WORKDIR /app
+
+# Copy everything including vendor directory
+COPY . .
+
+# Build using vendored dependencies (no network calls)
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -a -installsuffix cgo -o dws .
+
+# Final stage - use scratch for minimal image (no network calls)
+FROM scratch
+
+# Copy CA certificates from builder for any future HTTPS needs
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+WORKDIR /app
+
+# Copy the binary from builder stage
+COPY --from=builder /app/dws .
+
+# Copy rules files
+COPY rules.yaml ./
+
+# Expose port
+EXPOSE 8080
+
+# Set environment variables
+ENV RULES_FILE=rules.yaml
+ENV LOGGING=stdout
+ENV PORT=8080
+
+# No healthcheck to avoid dependency on wget/curl
+# Applications can implement their own health monitoring
+
+# Run the application
+CMD ["./dws"]

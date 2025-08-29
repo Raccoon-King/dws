@@ -2,49 +2,39 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"dws/api"
 	"dws/engine"
 )
 
 func TestE2E_FullWorkflow(t *testing.T) {
 	// Create test rules file
-	rulesPath := createRulesFile(t)
+	rulesPath := CreateRulesFile(t)
 	os.Setenv("RULES_FILE", rulesPath)
+	api.SetRulesFile(rulesPath)
 	defer os.Unsetenv("RULES_FILE")
 
-	// Start server in background
-	srv, err := newServer()
+	// Create a new server instance
+	srv, err := NewServer(rulesPath)
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
 	}
 
-	// Start server in goroutine
-	serverErrors := make(chan error, 1)
-	go func() {
-		serverErrors <- srv.ListenAndServe()
-	}()
+	// Create a test server
+	testServer := httptest.NewServer(srv.Handler)
+	defer testServer.Close()
 
-	// Wait for server to start
-	time.Sleep(100 * time.Millisecond)
-
-	// Ensure server is running
-	defer func() {
-		if err := srv.Shutdown(context.Background()); err != nil {
-			t.Logf("server shutdown error: %v", err)
-		}
-	}()
-
-	baseURL := "http://localhost:8080"
+	baseURL := testServer.URL
 
 	t.Run("health_check", func(t *testing.T) {
 		resp, err := http.Get(baseURL + "/health")
@@ -96,19 +86,22 @@ func TestE2E_FullWorkflow(t *testing.T) {
 			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, string(body))
 		}
 
-		var findings []engine.Finding
-		if err := json.NewDecoder(resp.Body).Decode(&findings); err != nil {
+		var report struct {
+			FileID   string          `json:"fileID"`
+			Findings []engine.Finding `json:"findings"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
 
 		// Verify we got findings (should match "foo" pattern)
-		if len(findings) == 0 {
+		if len(report.Findings) == 0 {
 			t.Error("expected at least one finding")
 		}
 
 		// Verify finding details
 		found := false
-		for _, f := range findings {
+		for _, f := range report.Findings {
 			if f.RuleID == "r1" && f.Severity == "high" {
 				found = true
 				if !strings.Contains(f.Context, "foo") {
@@ -122,27 +115,30 @@ func TestE2E_FullWorkflow(t *testing.T) {
 		}
 	})
 
-	t.Run("process_document", func(t *testing.T) {
-		// Test the process-document endpoint
-		testContent := "This is another test with foo pattern"
-		
+	t.Run("scan_pdf_file", func(t *testing.T) {
+		// Create test document with pattern that should trigger rule
+		pdfContent, err := os.ReadFile("Raccoon_World_Domination_Report.pdf")
+		if err != nil {
+			t.Fatalf("read pdf file: %v", err)
+		}
+
 		var body bytes.Buffer
 		writer := multipart.NewWriter(&body)
-		
-		part, err := writer.CreateFormFile("file", "document.txt")
+
+		part, err := writer.CreateFormFile("file", "Raccoon_World_Domination_Report.pdf")
 		if err != nil {
 			t.Fatalf("create form file: %v", err)
 		}
-		
-		if _, err := part.Write([]byte(testContent)); err != nil {
+
+		if _, err := part.Write(pdfContent); err != nil {
 			t.Fatalf("write to form: %v", err)
 		}
-		
+
 		if err := writer.Close(); err != nil {
 			t.Fatalf("close writer: %v", err)
 		}
 
-		req, err := http.NewRequest("POST", baseURL+"/process-document", &body)
+		req, err := http.NewRequest("POST", baseURL+"/scan", &body)
 		if err != nil {
 			t.Fatalf("create request: %v", err)
 		}
@@ -151,7 +147,7 @@ func TestE2E_FullWorkflow(t *testing.T) {
 		client := &http.Client{Timeout: 10 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
-			t.Fatalf("process-document request failed: %v", err)
+			t.Fatalf("scan request failed: %v", err)
 		}
 		defer resp.Body.Close()
 
@@ -160,18 +156,32 @@ func TestE2E_FullWorkflow(t *testing.T) {
 			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, string(body))
 		}
 
-		// Decode the report structure
-		var report map[string]interface{}
+		var report struct {
+			FileID   string          `json:"fileID"`
+			Findings []engine.Finding `json:"findings"`
+		}
 		if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
 
-		// Verify report structure
-		if _, exists := report["fileID"]; !exists {
-			t.Error("expected fileID in report")
+		// Verify we got findings (should match "raccoon" pattern)
+		if len(report.Findings) == 0 {
+			t.Error("expected at least one finding")
 		}
-		if _, exists := report["findings"]; !exists {
-			t.Error("expected findings in report")
+
+		// Verify finding details
+		found := false
+		for _, f := range report.Findings {
+			if f.RuleID == "raccoon-mention" && f.Severity == "informational" {
+				found = true
+				if !strings.Contains(strings.ToLower(f.Context), "raccoon") {
+					t.Errorf("expected match to contain 'raccoon', got: %s", f.Context)
+				}
+				break
+			}
+		}
+		if !found {
+			t.Error("expected to find rule raccoon-mention with informational severity")
 		}
 	})
 
@@ -238,39 +248,47 @@ func TestE2E_FullWorkflow(t *testing.T) {
 	})
 
 	t.Run("rules_reload", func(t *testing.T) {
-		// Test rules reload endpoint
-		resp, err := http.Post(baseURL+"/rules/reload", "application/json", nil)
+		// Test rules reload endpoint by sending new rules
+		rules := []engine.Rule{
+			{ID: "test-reload", Pattern: "test", Severity: "low", Description: "test rule"},
+		}
+		reqBody := map[string][]engine.Rule{"rules": rules}
+		body, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("marshal rules: %v", err)
+		}
+		
+		resp, err := http.Post(baseURL+"/rules/reload", "application/json", bytes.NewReader(body))
 		if err != nil {
 			t.Fatalf("rules reload failed: %v", err)
 		}
 		defer resp.Body.Close()
 		
 		if resp.StatusCode != http.StatusOK {
-			t.Errorf("expected 200, got %d", resp.StatusCode)
+			body, _ := io.ReadAll(resp.Body)
+			t.Errorf("expected 200, got %d: %s", resp.StatusCode, string(body))
 		}
 	})
 }
 
 func TestE2E_LoadBalancing(t *testing.T) {
 	// Create test rules file
-	rulesPath := createRulesFile(t)
+	rulesPath := CreateRulesFile(t)
 	os.Setenv("RULES_FILE", rulesPath)
+	api.SetRulesFile(rulesPath)
 	defer os.Unsetenv("RULES_FILE")
 
-	// Start server
-	srv, err := newServer()
+	// Create a new server instance
+	srv, err := NewServer(rulesPath)
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
 	}
 
-	go func() {
-		srv.ListenAndServe()
-	}()
+	// Create a test server
+	testServer := httptest.NewServer(srv.Handler)
+	defer testServer.Close()
 
-	time.Sleep(100 * time.Millisecond)
-	defer srv.Shutdown(context.Background())
-
-	baseURL := "http://localhost:8080"
+	baseURL := testServer.URL
 
 	t.Run("concurrent_requests", func(t *testing.T) {
 		// Test multiple concurrent requests
@@ -320,13 +338,16 @@ func TestE2E_LoadBalancing(t *testing.T) {
 					return
 				}
 
-				var findings []engine.Finding
-				if err := json.NewDecoder(resp.Body).Decode(&findings); err != nil {
+				var report struct {
+					FileID   string          `json:"fileID"`
+					Findings []engine.Finding `json:"findings"`
+				}
+				if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
 					errors <- err
 					return
 				}
 
-				if len(findings) == 0 {
+				if len(report.Findings) == 0 {
 					errors <- fmt.Errorf("request %d got no findings", id)
 					return
 				}

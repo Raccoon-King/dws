@@ -6,35 +6,139 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
+	"strings"
 
 	"dws/engine"
 	"dws/scanner"
 )
 
+var rulesFile string
+
+// SetRulesFile sets the rules file path for the api package.
+func SetRulesFile(path string) {
+	rulesFile = path
+}
+
 type report struct {
 	FileID   string          `json:"fileID"`
 	Findings []engine.Finding `json:"findings"`
 }
+
+// EndpointDoc represents the documentation for a single API endpoint.
+
+type EndpointDoc struct {
+	Path        string      `json:"path"`
+	Method      string      `json:"method"`
+	Description string      `json:"description"`
+	DataShapes  []DataShape `json:"data_shapes"`
+	CurlExample string      `json:"curl_example"`
+}
+
+
+// DataShape represents the structure of a request or response body.
+
+type DataShape struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Shape       string `json:"shape"`
+}
+
+
+// DocsHandler returns a JSON array of all available endpoints and their documentation.
+
+func DocsHandler(w http.ResponseWriter, r *http.Request) {
+	docs := []EndpointDoc{
+		{
+			Path:        "/scan",
+			Method:      "POST",
+			Description: "Upload a document to be scanned and receive a structured report of findings including rule descriptions.",
+			DataShapes: []DataShape{
+				{
+					Name:        "Request",
+					Description: "multipart/form-data",
+					Shape:       `{"file": "<file>"}`,
+				},
+				{
+					Name:        "Response",
+					Description: "A structured report of findings.",
+					Shape:       `{"file_id":"uploaded-filename","findings":[{"rule_id":"rule-1","severity":"high","line":3,"context":"line containing match","description":"rule description"}]}`,
+				},
+			},
+			CurlExample: `curl -X POST -F 'file=@/path/to/your/file.pdf' http://localhost:8080/scan`,
+		},
+		{
+			Path:        "/rules/reload",
+			Method:      "POST",
+			Description: "Replace the existing rules with a new set.",
+			DataShapes: []DataShape{
+				{
+					Name:        "Request",
+					Description: "A JSON object containing the new rules.",
+					Shape:       `{"rules":[{"id":"rule-1","pattern":"secret","severity":"high"}]}`,
+				},
+			},
+			CurlExample: `curl -X POST -H "Content-Type: application/json" -d '{\"rules\":[{\"id\":\"rule-1\",\"pattern\":\"secret\",\"severity\":\"high\"}]}' http://localhost:8080/rules/reload`,
+		},
+		{
+			Path:        "/rules/load",
+			Method:      "POST",
+			Description: "Load rules from a YAML file on disk.",
+			DataShapes: []DataShape{
+				{
+					Name:        "Request",
+					Description: "A JSON object containing the path to the rules file.",
+					Shape:       `{"path":"/etc/dws/rules.yaml"}`,
+				},
+			},
+			CurlExample: `curl -X POST -H "Content-Type: application/json" -d '{\"path\":\"/etc/dws/rules.yaml\"}' http://localhost:8080/rules/load`,
+		},
+		{
+			Path:        "/health",
+			Method:      "GET",
+			Description: "Health check endpoint.",
+			DataShapes: []DataShape{
+				{
+					Name:        "Response",
+					Description: "A JSON object indicating the status of the service.",
+					Shape:       `{"status":"ok"}`,
+				},
+			},
+			CurlExample: `curl http://localhost:8080/health`,
+		},
+		{
+			Path:        "/docs",
+			Method:      "GET",
+			Description: "Returns a JSON array of all available endpoints and their documentation.",
+			CurlExample: `curl http://localhost:8080/docs`,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(docs)
+}
+
 func ScanHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		http.Error(w, "invalid multipart", http.StatusBadRequest)
+		ErrorResponse(w, http.StatusBadRequest, "invalid multipart")
 		return
 	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "missing file", http.StatusBadRequest)
+		ErrorResponse(w, http.StatusBadRequest, "missing file")
 		return
 	}
 	defer file.Close()
 	data, err := io.ReadAll(file)
 	if err != nil {
-		http.Error(w, "read error", http.StatusInternalServerError)
+		ErrorResponse(w, http.StatusInternalServerError, "read error")
 		return
 	}
 	text, err := scanner.ExtractText(data, header.Filename)
 	if err != nil {
-		http.Error(w, "unsupported file", http.StatusBadRequest)
+		ErrorResponse(w, http.StatusBadRequest, "unsupported file")
 		return
 	}
 	findings := engine.Evaluate(text, header.Filename, engine.GetRules())
@@ -42,44 +146,10 @@ func ScanHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("API_DEBUG: Findings before encoding: %+v", findings)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	for _, finding := range findings {
-		jsonBytes, err := json.Marshal(finding)
-		if err != nil {
-			log.Printf("Error marshalling finding to JSON: %v", err)
-			continue
-		}
-		w.Write(jsonBytes)
-		w.Write([]byte("\n")) // Manually write newline
-	}
-}
-
-// ProcessDocumentHandler accepts a document, scans it, and returns findings in a report structure.
-func ProcessDocumentHandler(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		http.Error(w, "invalid multipart", http.StatusBadRequest)
-		return
-	}
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		http.Error(w, "missing file", http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-	data, err := io.ReadAll(file)
-	if err != nil {
-		http.Error(w, "read error", http.StatusInternalServerError)
-		return
-	}
-	text, err := scanner.ExtractText(data, header.Filename)
-	if err != nil {
-		http.Error(w, "unsupported file", http.StatusBadRequest)
-		return
-	}
-	findings := engine.Evaluate(text, header.Filename, engine.GetRules())
-	
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(report{FileID: header.Filename, Findings: findings})
 }
+
+
 
 // ReloadRulesHandler replaces the current rule set.
 func ReloadRulesHandler(w http.ResponseWriter, r *http.Request) {
@@ -88,14 +158,14 @@ func ReloadRulesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	var req request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		ErrorResponse(w, http.StatusBadRequest, "invalid request")
 		return
 	}
 
 	for i := range req.Rules {
 		compiled, err := regexp.Compile(req.Rules[i].Pattern)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to compile regex for rule %s: %v", req.Rules[i].ID, err), http.StatusBadRequest)
+			ErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("failed to compile regex for rule %s: %v", req.Rules[i].ID, err))
 			return
 		}
 		req.Rules[i].CompiledPattern = compiled
@@ -112,19 +182,34 @@ func LoadRulesFromFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	var req request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		ErrorResponse(w, http.StatusBadRequest, "invalid request")
 		return
 	}
-	if err := engine.LoadRulesFromYAML(req.Path); err != nil {
-		log.Printf("Error loading rules from file %s: %v", req.Path, err)
-		http.Error(w, "load error", http.StatusInternalServerError)
+
+	// Clean the path to prevent path traversal attacks.
+	path := filepath.Clean(req.Path)
+	if strings.HasPrefix(path, "..") {
+		ErrorResponse(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+
+	if err := engine.LoadRulesFromYAML(path); err != nil {
+		log.Printf("Error loading rules from file %s: %v", path, err)
+		ErrorResponse(w, http.StatusInternalServerError, "load error")
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
 
+
 // HealthHandler reports service health.
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
+	// Check if the rules file is readable
+	if _, err := os.Stat(rulesFile); err != nil {
+		ErrorResponse(w, http.StatusServiceUnavailable, "rules file not readable")
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"ok"}`))
 }

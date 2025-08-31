@@ -13,17 +13,21 @@ import (
 )
 
 func TestHealthHandler(t *testing.T) {
-	// Create a dummy rules file
+	engine.SetRules(nil)
 	rulesFile, err := os.CreateTemp(t.TempDir(), "rules*.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Close the file immediately after creation to allow deletion
+	if _, err := rulesFile.WriteString("rules:\n  - id: r1\n    pattern: foo\n    severity: high\n"); err != nil {
+		t.Fatal(err)
+	}
 	rulesFile.Close()
 	defer os.Remove(rulesFile.Name())
 
-	// Set the rules file path in the api package
 	SetRulesFile(rulesFile.Name())
+	if err := engine.LoadRulesFromYAML(rulesFile.Name()); err != nil {
+		t.Fatal(err)
+	}
 
 	req, err := http.NewRequest("GET", "/health", nil)
 	if err != nil {
@@ -48,7 +52,7 @@ func TestHealthHandler(t *testing.T) {
 }
 
 func TestHealthHandler_NoRulesFile(t *testing.T) {
-	// Set the rules file path to a non-existent file
+	engine.SetRules(nil)
 	SetRulesFile("nonexistent.yaml")
 
 	req, err := http.NewRequest("GET", "/health", nil)
@@ -67,7 +71,31 @@ func TestHealthHandler_NoRulesFile(t *testing.T) {
 	}
 }
 
+func TestHealthHandler_NoRulesLoaded(t *testing.T) {
+	engine.SetRules(nil)
+	rulesFile, err := os.CreateTemp(t.TempDir(), "rules*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rulesFile.Close()
+	defer os.Remove(rulesFile.Name())
 
+	SetRulesFile(rulesFile.Name())
+
+	req, err := http.NewRequest("GET", "/health", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(HealthHandler)
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusServiceUnavailable {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusServiceUnavailable)
+	}
+}
 
 func TestScanHandler(t *testing.T) {
 	// Create a dummy rules file
@@ -116,7 +144,7 @@ func TestScanHandler(t *testing.T) {
 	}
 
 	var report struct {
-		FileID   string          `json:"fileID"`
+		FileID   string           `json:"fileID"`
 		Findings []engine.Finding `json:"findings"`
 	}
 	if err := json.NewDecoder(rr.Body).Decode(&report); err != nil {
@@ -125,6 +153,52 @@ func TestScanHandler(t *testing.T) {
 
 	if len(report.Findings) != 1 {
 		t.Errorf("expected 1 finding, got %d", len(report.Findings))
+	}
+}
+
+func TestScanHandler_FileTooLarge(t *testing.T) {
+	engine.SetRules(nil)
+	// Create a dummy rules file
+	rulesFile, err := os.CreateTemp(t.TempDir(), "rules*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rulesFile.WriteString("rules:\n  - id: r1\n    pattern: foo\n    severity: high\n"); err != nil {
+		t.Fatal(err)
+	}
+	rulesFile.Close()
+	defer os.Remove(rulesFile.Name())
+
+	if err := engine.LoadRulesFromYAML(rulesFile.Name()); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a large test file exceeding maxUploadSize
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "big.txt")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	big := bytes.Repeat([]byte("a"), maxUploadSize+1)
+	if _, err := part.Write(big); err != nil {
+		t.Fatalf("write to form: %v", err)
+	}
+	writer.Close()
+
+	req, err := http.NewRequest("POST", "/scan", &body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(ScanHandler)
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusBadRequest {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusBadRequest)
 	}
 }
 

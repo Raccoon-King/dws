@@ -17,13 +17,15 @@ import (
 
 var rulesFile string
 
+const maxUploadSize = 10 << 20 // 10 MB
+
 // SetRulesFile sets the rules file path for the api package.
 func SetRulesFile(path string) {
 	rulesFile = path
 }
 
 type report struct {
-	FileID   string          `json:"fileID"`
+	FileID   string           `json:"fileID"`
 	Findings []engine.Finding `json:"findings"`
 }
 
@@ -37,7 +39,6 @@ type EndpointDoc struct {
 	CurlExample string      `json:"curl_example"`
 }
 
-
 // DataShape represents the structure of a request or response body.
 
 type DataShape struct {
@@ -45,7 +46,6 @@ type DataShape struct {
 	Description string `json:"description"`
 	Shape       string `json:"shape"`
 }
-
 
 // DocsHandler returns a JSON array of all available endpoints and their documentation.
 
@@ -121,7 +121,7 @@ func DocsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ScanHandler(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
 		ErrorResponse(w, http.StatusBadRequest, "invalid multipart")
 		return
 	}
@@ -130,10 +130,18 @@ func ScanHandler(w http.ResponseWriter, r *http.Request) {
 		ErrorResponse(w, http.StatusBadRequest, "missing file")
 		return
 	}
+	if header.Size > maxUploadSize {
+		ErrorResponse(w, http.StatusBadRequest, "file too large")
+		return
+	}
 	defer file.Close()
-	data, err := io.ReadAll(file)
+	data, err := io.ReadAll(io.LimitReader(file, maxUploadSize+1))
 	if err != nil {
 		ErrorResponse(w, http.StatusInternalServerError, "read error")
+		return
+	}
+	if int64(len(data)) > maxUploadSize {
+		ErrorResponse(w, http.StatusBadRequest, "file too large")
 		return
 	}
 	text, err := scanner.ExtractText(data, header.Filename)
@@ -149,8 +157,6 @@ func ScanHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(report{FileID: header.Filename, Findings: findings})
 }
 
-
-
 // ReloadRulesHandler replaces the current rule set.
 func ReloadRulesHandler(w http.ResponseWriter, r *http.Request) {
 	type request struct {
@@ -161,7 +167,10 @@ func ReloadRulesHandler(w http.ResponseWriter, r *http.Request) {
 		ErrorResponse(w, http.StatusBadRequest, "invalid request")
 		return
 	}
-
+	if err := engine.ValidateRules(req.Rules); err != nil {
+		ErrorResponse(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	for i := range req.Rules {
 		compiled, err := regexp.Compile(req.Rules[i].Pattern)
 		if err != nil {
@@ -201,12 +210,14 @@ func LoadRulesFromFileHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-
 // HealthHandler reports service health.
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
-	// Check if the rules file is readable
 	if _, err := os.Stat(rulesFile); err != nil {
 		ErrorResponse(w, http.StatusServiceUnavailable, "rules file not readable")
+		return
+	}
+	if len(engine.GetRules()) == 0 {
+		ErrorResponse(w, http.StatusServiceUnavailable, "no rules loaded")
 		return
 	}
 

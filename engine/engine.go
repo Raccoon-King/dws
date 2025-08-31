@@ -24,10 +24,10 @@ func GetDebugMode() bool {
 
 // Rule defines a pattern that will be searched in text.
 type Rule struct {
-	ID          string `json:"id" yaml:"id"`
-	Pattern     string `json:"pattern" yaml:"pattern"`
-	Severity    string `json:"severity" yaml:"severity"`
-	Description string `json:"description" yaml:"description"`
+	ID              string         `json:"id" yaml:"id"`
+	Pattern         string         `json:"pattern" yaml:"pattern"`
+	Severity        string         `json:"severity" yaml:"severity"`
+	Description     string         `json:"description" yaml:"description"`
 	CompiledPattern *regexp.Regexp `json:"-" yaml:"-"` // Compiled regex for internal use
 }
 
@@ -58,6 +58,21 @@ type RulesConfig struct {
 	Rules []Rule `yaml:"rules"`
 }
 
+// ValidateRules ensures each rule has a unique, non-empty ID.
+func ValidateRules(rules []Rule) error {
+	seen := make(map[string]struct{})
+	for _, r := range rules {
+		if strings.TrimSpace(r.ID) == "" {
+			return fmt.Errorf("rule ID cannot be empty")
+		}
+		if _, ok := seen[r.ID]; ok {
+			return fmt.Errorf("duplicate rule ID: %s", r.ID)
+		}
+		seen[r.ID] = struct{}{}
+	}
+	return nil
+}
+
 func LoadRulesFromYAML(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -68,6 +83,9 @@ func LoadRulesFromYAML(path string) error {
 		return err
 	}
 
+	if err := ValidateRules(config.Rules); err != nil {
+		return err
+	}
 	for i := range config.Rules {
 		compiled, err := regexp.Compile(config.Rules[i].Pattern)
 		if err != nil {

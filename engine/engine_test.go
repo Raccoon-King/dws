@@ -82,5 +82,24 @@ func TestLoadRulesFromYAML(t *testing.T) {
 	}
 }
 
+func TestLoadRulesFromYAML_EmptyID(t *testing.T) {
+	rulesContent := "rules:\n  - id:\n    pattern: foo\n    severity: high\n"
+	tmpFile := t.TempDir() + "/empty.yaml"
+	if err := os.WriteFile(tmpFile, []byte(rulesContent), 0644); err != nil {
+		t.Fatalf("failed to create temp rules file: %v", err)
+	}
+	if err := LoadRulesFromYAML(tmpFile); err == nil {
+		t.Fatalf("expected error for empty rule ID")
+	}
+}
 
-
+func TestLoadRulesFromYAML_DuplicateID(t *testing.T) {
+	rulesContent := "rules:\n  - id: r1\n    pattern: foo\n    severity: high\n  - id: r1\n    pattern: bar\n    severity: low\n"
+	tmpFile := t.TempDir() + "/dup.yaml"
+	if err := os.WriteFile(tmpFile, []byte(rulesContent), 0644); err != nil {
+		t.Fatalf("failed to create temp rules file: %v", err)
+	}
+	if err := LoadRulesFromYAML(tmpFile); err == nil {
+		t.Fatalf("expected error for duplicate rule IDs")
+	}
+}

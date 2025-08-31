@@ -279,7 +279,8 @@ kubectl describe service dws-service -n dws
 |----------|---------|-------------|
 | RULES_FILE | rules.yaml | Path to rules configuration file |
 | LOGGING | stdout | Logging destination (stdout/stderr/file) |
-| DEBUG | false | Enable debug mode |
+| LOG_LEVEL | info | Minimum log level (debug/info/warn/error) |
+| LOG_FORMAT | text | Log output format (text/json) |
 | MAX_UPLOAD_SIZE | 10485760 | Maximum upload size in bytes |
 
 ### ConfigMap Updates

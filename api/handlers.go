@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"strings"
 
 	"dws/engine"
+	"dws/logging"
 	"dws/scanner"
 )
 
@@ -159,9 +159,7 @@ func ScanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	findings := engine.Evaluate(text, header.Filename, engine.GetRules())
-	if engine.GetDebugMode() {
-		log.Printf("API_DEBUG: Findings before encoding: %+v", findings)
-	}
+	logging.Debug("findings before encoding", map[string]any{"findings": findings})
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(report{FileID: header.Filename, Findings: findings})
 }
@@ -212,7 +210,7 @@ func LoadRulesFromFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := engine.LoadRulesFromYAML(path); err != nil {
-		log.Printf("Error loading rules from file %s: %v", path, err)
+		logging.Error("failed to load rules", map[string]any{"path": path, "error": err.Error()})
 		ErrorResponse(w, http.StatusInternalServerError, "load error")
 		return
 	}

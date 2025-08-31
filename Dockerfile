@@ -39,6 +39,7 @@ EXPOSE 8080
 # Set environment variables
 ENV RULES_FILE=rules.yaml
 ENV LOGGING=stdout
+ENV LOG_LEVEL=info
 ENV PORT=8080
 
 # Health check

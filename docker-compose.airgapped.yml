@@ -14,7 +14,7 @@ services:
     environment:
       - RULES_FILE=rules.yaml
       - LOGGING=stdout
-      - DEBUG_MODE=false
+      - LOG_LEVEL=info
     volumes:
       - ./rules.yaml:/app/rules.yaml:ro
       - dws-logs:/var/log

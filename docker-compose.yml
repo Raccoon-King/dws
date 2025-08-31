@@ -11,7 +11,7 @@ services:
     environment:
       - RULES_FILE=rules.yaml
       - LOGGING=stdout
-      - DEBUG=false
+      - LOG_LEVEL=info
     volumes:
       - ./rules.yaml:/root/rules.yaml:ro
       

@@ -80,7 +80,7 @@ docker save dws:airgapped -o dws-airgapped.tar
    # Configure environment
    export RULES_FILE=rules.yaml
    export PORT=8080
-   export DEBUG_MODE=false
+   export LOG_LEVEL=info
    
    # Run the service
    ./dws
@@ -133,7 +133,8 @@ docker save dws:airgapped -o dws-airgapped.tar
 |----------|---------|-------------|
 | `RULES_FILE` | `rules.yaml` | Path to rules configuration file |
 | `PORT` | `8080` | HTTP server port |
-| `DEBUG_MODE` | `false` | Enable debug logging |
+| `LOG_LEVEL` | `info` | Minimum log level (debug/info/warn/error) |
+| `LOG_FORMAT` | `text` | Log output format (text/json) |
 | `LOGGING` | `stdout` | Log output destination |
 | `MAX_UPLOAD_SIZE` | `10485760` | Maximum upload size in bytes |
 

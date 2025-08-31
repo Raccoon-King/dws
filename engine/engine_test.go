@@ -103,3 +103,14 @@ func TestLoadRulesFromYAML_DuplicateID(t *testing.T) {
 		t.Fatalf("expected error for duplicate rule IDs")
 	}
 }
+
+func TestLoadRulesFromYAML_InvalidSeverity(t *testing.T) {
+	rulesContent := "rules:\n  - id: r1\n    pattern: foo\n    severity: critical\n"
+	tmpFile := t.TempDir() + "/sev.yaml"
+	if err := os.WriteFile(tmpFile, []byte(rulesContent), 0644); err != nil {
+		t.Fatalf("failed to create temp rules file: %v", err)
+	}
+	if err := LoadRulesFromYAML(tmpFile); err == nil {
+		t.Fatalf("expected error for invalid severity")
+	}
+}

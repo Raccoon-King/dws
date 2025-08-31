@@ -71,6 +71,12 @@ func ExtractText(data []byte, filename string) (string, error) {
 		}
 		re := regexp.MustCompile("<[^>]+>")
 		extractedText = re.ReplaceAllString(string(xmlData), " ")
+	case ".rtf":
+		// Strip RTF control words and braces to approximate plain text
+		text := regexp.MustCompile("\\\\[a-zA-Z]+\\d* ?").ReplaceAllString(string(data), " ")
+		text = strings.ReplaceAll(text, "{", " ")
+		text = strings.ReplaceAll(text, "}", " ")
+		extractedText = text
 	case ".yaml", ".yml", ".txt", ".json", ".xml":
 		extractedText = string(data)
 	default:

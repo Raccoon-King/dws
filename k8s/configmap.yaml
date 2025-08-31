@@ -8,7 +8,7 @@ metadata:
 data:
   RULES_FILE: "rules.yaml"
   LOGGING: "stdout"
-  DEBUG: "false"
+  LOG_LEVEL: "info"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -24,9 +24,9 @@ data:
       pattern: foo
       severity: high
       description: "Test rule for pattern matching"
-    - id: r2  
+    - id: r2
       pattern: sensitive
-      severity: critical
+      severity: medium
       description: "Detects sensitive information"
   rules.json: |
     {
@@ -39,8 +39,8 @@ data:
         },
         {
           "id": "r2",
-          "pattern": "sensitive", 
-          "severity": "critical",
+          "pattern": "sensitive",
+          "severity": "medium",
           "description": "Detects sensitive information"
         }
       ]

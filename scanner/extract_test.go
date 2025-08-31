@@ -65,6 +65,15 @@ func TestExtractTextDOCX(t *testing.T) {
 	}
 }
 
+func TestExtractTextRTF(t *testing.T) {
+	data := []byte("{\\rtf1\\ansi This is \\b bold\\b0 text}")
+	txt, err := ExtractText(data, "file.rtf")
+	normalized := strings.Join(strings.Fields(txt), " ")
+	if err != nil || normalized != "This is bold text" {
+		t.Fatalf("unexpected: %v %q", err, txt)
+	}
+}
+
 func TestExtractTextUnsupported(t *testing.T) {
 	if _, err := ExtractText([]byte(""), "file.bin"); err == nil {
 		t.Fatalf("expected error")

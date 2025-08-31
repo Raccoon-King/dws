@@ -1,6 +1,6 @@
 # Document Scanning Rules Engine
 
-This repository provides a minimal in-memory rules engine and HTTP service. It ingests uploaded documents (PDF, HTML, plain text, YAML, JSON, XML, or DOCX), normalizes them to text, evaluates that text against a configurable set of regex-based rules, and returns structured findings.
+This repository provides a minimal in-memory rules engine and HTTP service. It ingests uploaded documents (PDF, HTML, plain text, YAML, JSON, XML, DOCX, or RTF), normalizes them to text, evaluates that text against a configurable set of regex-based rules, and returns structured findings.
 
 ## Development
 
@@ -9,6 +9,16 @@ Run tests:
 ```bash
 go test ./... -cover
 ```
+
+## Logging
+
+Control log output via the following environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `LOGGING` | Destination for logs (`stdout`, `stderr`, or `file`) |
+| `LOG_LEVEL` | Minimum log level (`debug`, `info`, `warn`, `error`) |
+| `LOG_FORMAT` | Log format (`text` or `json`) |
 
 ## Deployment
 
@@ -23,7 +33,7 @@ Upload a document to be scanned and receive a structured report of findings incl
 
 | Field | Type | Description |
 |------|------|-------------|
-| `file` | file | Document to scan. Supports `.pdf`, `.html`, `.txt`, `.yaml`, `.yml`, `.json`, `.xml`, `.docx` |
+| `file` | file | Document to scan. Supports `.pdf`, `.html`, `.txt`, `.yaml`, `.yml`, `.json`, `.xml`, `.docx`, `.rtf` |
 
 **Response**
 

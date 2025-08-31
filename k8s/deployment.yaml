@@ -41,11 +41,11 @@ spec:
             configMapKeyRef:
               name: dws-config
               key: LOGGING
-        - name: DEBUG
+        - name: LOG_LEVEL
           valueFrom:
             configMapKeyRef:
               name: dws-config
-              key: DEBUG
+              key: LOG_LEVEL
         volumeMounts:
         - name: rules-volume
           mountPath: /root/rules.yaml

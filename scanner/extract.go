@@ -1,8 +1,10 @@
 package scanner
 
 import (
+	"archive/zip"
 	"bytes"
 	"fmt"
+	"io"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -42,7 +44,34 @@ func ExtractText(data []byte, filename string) (string, error) {
 		// Then, remove all other tags
 		re = regexp.MustCompile("<[^>]+>")
 		extractedText = re.ReplaceAllString(cleaned, " ")
-		case ".yaml", ".yml", ".txt", ".json", ".xml":
+	case ".docx":
+		readerAt := bytes.NewReader(data)
+		zr, err := zip.NewReader(readerAt, int64(len(data)))
+		if err != nil {
+			return "", fmt.Errorf("failed to create zip reader: %w", err)
+		}
+		var docFile *zip.File
+		for _, f := range zr.File {
+			if f.Name == "word/document.xml" {
+				docFile = f
+				break
+			}
+		}
+		if docFile == nil {
+			return "", fmt.Errorf("document.xml not found in docx")
+		}
+		rc, err := docFile.Open()
+		if err != nil {
+			return "", fmt.Errorf("failed to open document.xml: %w", err)
+		}
+		defer rc.Close()
+		xmlData, err := io.ReadAll(rc)
+		if err != nil {
+			return "", fmt.Errorf("failed to read document.xml: %w", err)
+		}
+		re := regexp.MustCompile("<[^>]+>")
+		extractedText = re.ReplaceAllString(string(xmlData), " ")
+	case ".yaml", ".yml", ".txt", ".json", ".xml":
 		extractedText = string(data)
 	default:
 		return "", fmt.Errorf("unsupported file type: %s", ext)

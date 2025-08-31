@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"dws/engine"
@@ -17,7 +18,15 @@ import (
 
 var rulesFile string
 
-const maxUploadSize = 10 << 20 // 10 MB
+var maxUploadSize int64 = 10 << 20 // 10 MB
+
+func init() {
+	if v := os.Getenv("MAX_UPLOAD_SIZE"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			maxUploadSize = n
+		}
+	}
+}
 
 // SetRulesFile sets the rules file path for the api package.
 func SetRulesFile(path string) {

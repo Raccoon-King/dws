@@ -180,7 +180,7 @@ func TestScanHandler_FileTooLarge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create form file: %v", err)
 	}
-	big := bytes.Repeat([]byte("a"), maxUploadSize+1)
+	big := bytes.Repeat([]byte("a"), int(maxUploadSize)+1)
 	if _, err := part.Write(big); err != nil {
 		t.Fatalf("write to form: %v", err)
 	}

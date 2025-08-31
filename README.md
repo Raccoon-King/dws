@@ -1,6 +1,6 @@
 # Document Scanning Rules Engine
 
-This repository provides a minimal in-memory rules engine and HTTP service. It ingests uploaded documents (PDF, HTML, plain text, or YAML), normalizes them to text, evaluates that text against a configurable set of regex-based rules, and returns structured findings.
+This repository provides a minimal in-memory rules engine and HTTP service. It ingests uploaded documents (PDF, HTML, plain text, YAML, JSON, XML, or DOCX), normalizes them to text, evaluates that text against a configurable set of regex-based rules, and returns structured findings.
 
 ## Development
 
@@ -23,7 +23,7 @@ Upload a document to be scanned and receive a structured report of findings incl
 
 | Field | Type | Description |
 |------|------|-------------|
-| `file` | file | Document to scan. Supports `.pdf`, `.html`, `.txt`, `.yaml`, `.yml` |
+| `file` | file | Document to scan. Supports `.pdf`, `.html`, `.txt`, `.yaml`, `.yml`, `.json`, `.xml`, `.docx` |
 
 **Response**
 

@@ -1,6 +1,8 @@
 package scanner
 
 import (
+	"archive/zip"
+	"bytes"
 	"strings"
 	"testing"
 )
@@ -39,6 +41,26 @@ func TestExtractTextXML(t *testing.T) {
 	data := []byte("<root><item>data</item></root>")
 	txt, err := ExtractText(data, "file.xml")
 	if err != nil || txt != "<root><item>data</item></root>" {
+		t.Fatalf("unexpected: %v %q", err, txt)
+	}
+}
+
+func TestExtractTextDOCX(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	f, err := zw.Create("word/document.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.Write([]byte("<w:document><w:body><w:p><w:r><w:t>Hello World</w:t></w:r></w:p></w:body></w:document>"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	txt, err := ExtractText(buf.Bytes(), "file.docx")
+	if err != nil || strings.TrimSpace(txt) != "Hello World" {
 		t.Fatalf("unexpected: %v %q", err, txt)
 	}
 }

@@ -135,6 +135,7 @@ docker save dws:airgapped -o dws-airgapped.tar
 | `PORT` | `8080` | HTTP server port |
 | `DEBUG_MODE` | `false` | Enable debug logging |
 | `LOGGING` | `stdout` | Log output destination |
+| `MAX_UPLOAD_SIZE` | `10485760` | Maximum upload size in bytes |
 
 ### Rules Configuration
 

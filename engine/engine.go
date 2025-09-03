@@ -1,8 +1,13 @@
 package engine
 
 import (
+	"io/ioutil"
 	"regexp"
 	"strings"
+
+	"gopkg.in/yaml.v3"
+
+	"github.com/sirupsen/logrus"
 )
 
 // Rule defines a pattern that will be searched in text.
@@ -36,11 +41,25 @@ func SetRules(rules []Rule) {
 }
 
 // LoadRulesFromFile loads rules from a YAML file without setting them globally.
-// TODO: Implement proper YAML parsing
 func LoadRulesFromFile(path string) ([]Rule, error) {
-	// Temporary implementation - returns empty rules for testing
-	// In production, this would parse the YAML file
-	return []Rule{}, nil
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"file":  path,
+			"error": err,
+		}).Error("Failed to read rules file")
+		return []Rule{}, err
+	}
+	var config RulesConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"file":     path,
+			"error":    err,
+			"yaml_data": string(data),
+		}).Error("Failed to unmarshal YAML rules file")
+		return []Rule{}, err
+	}
+	return config.Rules, nil
 }
 
 // GetRules returns the current in-memory rule set.
@@ -56,6 +75,11 @@ func Evaluate(text, fileID string, rules []Rule) []Finding {
 		for _, rule := range rules {
 			re, err := regexp.Compile(rule.Pattern)
 			if err != nil {
+				logrus.WithFields(logrus.Fields{
+					"rule_id":  rule.ID,
+					"pattern":  rule.Pattern,
+					"error":    err,
+				}).Warn("Failed to compile regex for rule")
 				continue
 			}
 			if re.MatchString(line) {

@@ -2,7 +2,7 @@
 .claude
 .gemini
 *.exe
-.github
+*.github
 
 # Test coverage and artifacts
 coverage

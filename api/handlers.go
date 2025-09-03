@@ -3,13 +3,14 @@ package api
 import (
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	"dws/engine"
 	"dws/scanner"
@@ -150,7 +151,10 @@ func RulesetHandler(w http.ResponseWriter, r *http.Request) {
 
 	rules, err := engine.LoadRulesFromFile(path)
 	if err != nil {
-		log.Printf("Error loading rules from file %s: %v", path, err)
+		logrus.WithFields(logrus.Fields{
+			"file":  path,
+			"error": err,
+		}).Error("Failed to load ruleset from file")
 		ErrorResponse(w, http.StatusInternalServerError, "failed to load ruleset")
 		return
 	}
@@ -205,7 +209,10 @@ func ScanHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	findings := engine.Evaluate(text, header.Filename, engine.GetRules())
 	if engine.GetDebugMode() {
-		log.Printf("API_DEBUG: Findings before encoding: %+v", findings)
+		logrus.WithFields(logrus.Fields{
+			"file_id":  header.Filename,
+			"findings": findings,
+		}).Debug("Findings before encoding")
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(Report{FileID: header.Filename, Findings: findings})
@@ -258,7 +265,10 @@ func LoadRulesFromFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := engine.LoadRulesFromYAML(path); err != nil {
-		log.Printf("Error loading rules from file %s: %v", path, err)
+		logrus.WithFields(logrus.Fields{
+			"file":  path,
+			"error": err,
+		}).Error("Failed to load rules from YAML file")
 		ErrorResponse(w, http.StatusInternalServerError, "failed to load rules file")
 		return
 	}

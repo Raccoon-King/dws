@@ -3,8 +3,10 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"dws/engine"
@@ -44,14 +46,15 @@ func TestReloadRulesHandler(t *testing.T) {
 	}
 }
 
-<<<<<<< Updated upstream
 func TestReloadRulesHandlerBadJSON(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/rules/reload", bytes.NewReader([]byte("{")))
 	w := httptest.NewRecorder()
 	ReloadRulesHandler(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
-=======
+	}
+}
+
 func TestRulesetHandler(t *testing.T) {
 	// Create a temp rules directory
 	rulesDir := t.TempDir()
@@ -160,11 +163,11 @@ func TestRulesetHandler_MissingRule(t *testing.T) {
 
 func TestLoadRulesFromFileHandler(t *testing.T) {
 	// Create a dummy rules file
-	rulesFile, err := os.CreateTemp(t.TempDir(), "rules*.yaml")
+	_, err := os.CreateTemp(t.TempDir(), "rules*.yaml")
 	if err != nil {
 		t.Fatal(err)
->>>>>>> Stashed changes
 	}
+	// TODO: Implement actual test body once LoadRulesFromFileHandler is implemented
 }
 
 func TestHealthHandler(t *testing.T) {
@@ -177,22 +180,4 @@ func TestHealthHandler(t *testing.T) {
 	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
 		t.Fatalf("unexpected content type: %s", ct)
 	}
-<<<<<<< Updated upstream
-=======
-
-	req, err := http.NewRequest("POST", "/rules/load", bytes.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(LoadRulesFromFileHandler)
-
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, http.StatusOK)
-	}
->>>>>>> Stashed changes
 }

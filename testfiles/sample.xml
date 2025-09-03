@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="sample">
+  <header>
+    <title>Sample XML Document</title>
+    <purpose>Testing the document scanner</purpose>
+  </header>
+  <content>
+    <paragraph>This is sample content.</paragraph>
+    <paragraph>It contains multiple elements.</paragraph>
+  </content>
+  <items>
+    <item>text extraction</item>
+    <item>parsing</item>
+  </items>
+</document>

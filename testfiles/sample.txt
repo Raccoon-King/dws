@@ -1,0 +1,4 @@
+This is a sample text file.
+It contains plain text content.
+This file is used for testing the document scanner.
+The scanner should extract this text without any modifications.

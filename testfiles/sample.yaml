@@ -1,0 +1,9 @@
+document_type: sample
+content: "This is a sample YAML file"
+metadata:
+  lines: 3
+  purpose: "testing scanner functionality"
+items:
+  - text extraction
+  - parsing
+  - validation

@@ -2,3 +2,44 @@
 .claude
 .gemini
 *.exe
+.github
+
+# Test coverage and artifacts
+coverage
+coverage.out
+*.out
+
+# Log files
+*.log
+dws.log
+
+# Test data files
+rules_json_test.yaml
+rules_json_test2.yaml
+Raccoon_World_Domination_Report.pdf
+
+# Development artifacts
+debug_*.go
+
+# Environment files
+.env
+.env.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Go build artifacts
+main
+dws
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp

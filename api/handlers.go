@@ -15,13 +15,6 @@ import (
 	"dws/scanner"
 )
 
-// ErrorResponse sends an error response with the specified status code and message.
-func ErrorResponse(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{"error": message})
-}
-
 var rulesFile string
 
 // SetRulesFile sets the rules file path for the api package.
@@ -230,12 +223,11 @@ func ReloadRulesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for i := range req.Rules {
-		compiled, err := regexp.Compile(req.Rules[i].Pattern)
+		_, err := regexp.Compile(req.Rules[i].Pattern)
 		if err != nil {
 			ErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("failed to compile regex for rule %s: %v", req.Rules[i].ID, err))
 			return
 		}
-		req.Rules[i].CompiledPattern = compiled
 	}
 
 	engine.SetRules(req.Rules)

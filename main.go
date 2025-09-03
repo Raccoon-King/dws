@@ -60,7 +60,7 @@ func NewServer(rulesFile string) (*http.Server, error) {
 func run() error {
 	rulesFile := os.Getenv("RULES_FILE")
 	if rulesFile == "" {
-		rulesFile = "rules.yaml" // Default rules file
+		rulesFile = "config/default.yaml" // Default rules file
 	}
 	api.SetRulesFile(rulesFile)
 	srv, err := NewServer(rulesFile)

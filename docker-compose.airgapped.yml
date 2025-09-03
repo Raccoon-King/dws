@@ -1,0 +1,55 @@
+version: '3.8'
+
+# Air-gapped Docker Compose configuration
+# This version uses locally built images only
+
+services:
+  dws:
+    build:
+      context: .
+      dockerfile: Dockerfile.airgapped
+    container_name: dws-api
+    ports:
+      - "8080:8080"
+    environment:
+      - RULES_FILE=rules.yaml
+      - LOGGING=stdout
+      - DEBUG_MODE=false
+    volumes:
+      - ./rules.yaml:/app/rules.yaml:ro
+      - dws-logs:/var/log
+    restart: unless-stopped
+    # No healthcheck to avoid dependency on wget/curl
+    networks:
+      - dws-network
+
+  # Optional: Nginx proxy using pre-built image
+  # Note: nginx:alpine image must be pre-loaded in airgapped environment
+  # docker save nginx:alpine -o nginx-alpine.tar
+  # docker load -i nginx-alpine.tar
+  nginx:
+    image: nginx:alpine
+    container_name: dws-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - dws
+    networks:
+      - dws-network
+    profiles:
+      - proxy
+    # Override to use locally available image
+    # Remove this section if nginx image is pre-loaded
+    pull_policy: never
+
+volumes:
+  dws-logs:
+    driver: local
+
+networks:
+  dws-network:
+    driver: bridge

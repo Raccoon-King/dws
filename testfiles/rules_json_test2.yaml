@@ -1,0 +1,16 @@
+{
+  "rules": [
+    {
+      "ID": "test",
+      "Pattern": "\\test\\b",
+      "Severity": "informational",
+      "Description": "checks for the word test."
+    },
+    {
+      "ID": "sample",
+      "Pattern": "\\sample\\b",
+      "Severity": "informational",
+      "Description": "checks for the word sample."
+    }
+  ]
+}

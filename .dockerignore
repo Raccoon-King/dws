@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+*.exe
+dws.exe
+dws
+
+# Logs
+*.log
+dws.log
+
+# Test files
+*_test.go
+test_*
+
+# Documentation
+*.md
+dws_action_plan.md
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# PowerShell scripts
+*.ps1
+
+# Test documents
+test_document.txt
+test_regex.go

@@ -5,6 +5,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	"dws/engine"
@@ -207,6 +211,9 @@ func ScanHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	findings := engine.Evaluate(text, header.Filename, engine.GetRules())
+	if engine.GetDebugMode() {
+		log.Printf("API_DEBUG: Findings before encoding: %+v", findings)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(Report{FileID: header.Filename, Findings: findings})
 }
@@ -218,9 +225,19 @@ func ReloadRulesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	var req request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		ErrorResponse(w, http.StatusBadRequest, "invalid request")
 		return
 	}
+
+	for i := range req.Rules {
+		compiled, err := regexp.Compile(req.Rules[i].Pattern)
+		if err != nil {
+			ErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("failed to compile regex for rule %s: %v", req.Rules[i].ID, err))
+			return
+		}
+		req.Rules[i].CompiledPattern = compiled
+	}
+
 	engine.SetRules(req.Rules)
 	w.WriteHeader(http.StatusOK)
 }
@@ -241,8 +258,15 @@ func LoadRulesFromFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := engine.LoadRulesFromYAML(req.Path); err != nil {
-		log.Printf("Error loading rules from file %s: %v", req.Path, err)
+	// Clean the path to prevent path traversal attacks.
+	path := filepath.Clean(req.Path)
+	if strings.HasPrefix(path, "..") {
+		ErrorResponse(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+
+	if err := engine.LoadRulesFromYAML(path); err != nil {
+		log.Printf("Error loading rules from file %s: %v", path, err)
 		ErrorResponse(w, http.StatusInternalServerError, "failed to load rules file")
 		return
 	}
@@ -253,6 +277,12 @@ func LoadRulesFromFileHandler(w http.ResponseWriter, r *http.Request) {
 
 // HealthHandler reports service health.
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
+	// Check if the rules file is readable
+	if _, err := os.Stat(rulesFile); err != nil {
+		ErrorResponse(w, http.StatusServiceUnavailable, "rules file not readable")
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"ok"}`))
 }

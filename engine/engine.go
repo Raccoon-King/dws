@@ -28,6 +28,7 @@ type Finding struct {
 }
 
 var currentRules []Rule
+var debugMode bool
 
 // SetRules replaces the in-memory rule set.
 func SetRules(rules []Rule) {
@@ -69,4 +70,25 @@ func Evaluate(text, fileID string, rules []Rule) []Finding {
 		}
 	}
 	return findings
+}
+
+// LoadRulesFromYAML loads rules from a YAML file and sets them globally.
+// This is called during initialization.
+func LoadRulesFromYAML(path string) error {
+	rules, err := LoadRulesFromFile(path)
+	if err != nil {
+		return err
+	}
+	SetRules(rules)
+	return nil
+}
+
+// SetDebugMode sets the debug mode for the engine.
+func SetDebugMode(debug bool) {
+	debugMode = debug
+}
+
+// GetDebugMode returns the current debug mode.
+func GetDebugMode() bool {
+	return debugMode
 }

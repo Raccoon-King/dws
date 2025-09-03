@@ -68,7 +68,83 @@ func TestExtractTextTXT(t *testing.T) {
 }
 
 func TestExtractTextUnsupported(t *testing.T) {
-	if _, err := ExtractText([]byte(""), "file.bin"); err == nil {
-		t.Fatalf("expected error")
+	// Test with data that contains null bytes (binary)
+	if _, err := ExtractText([]byte("\x00\x01\x02\x03"), "file.bin"); err == nil {
+		t.Fatalf("expected error for binary data")
+	}
+}
+
+func TestExtractTextBMP(t *testing.T) {
+	// Test BMP file (binary format)
+	if _, err := ExtractText([]byte("\x42\x4D\x94\x87\x00\x00"), "file.bmp"); err == nil {
+		t.Fatalf("expected error for BMP file")
+	}
+}
+
+func TestExtractTextUnknown(t *testing.T) {
+	// Test unknown extension but text content
+	data := []byte("This is text content in unknown format")
+	txt, err := ExtractText(data, "file.unknown")
+	if err != nil || txt != "This is text content in unknown format" {
+		t.Fatalf("unexpected: %v %q", err, txt)
+	}
+}
+
+func TestExtractTextNoExtension(t *testing.T) {
+	// Test file with no extension
+	data := []byte("No extension text")
+	txt, err := ExtractText(data, "file-no-ext")
+	if err != nil || txt != "No extension text" {
+		t.Fatalf("unexpected: %v %q", err, txt)
+	}
+}
+
+func TestExtractTextMixedContent(t *testing.T) {
+	data := []byte("normal text\x00with null")
+	txt, err := ExtractText(data, "file.txt")
+	if err != nil || txt != "normal text\x00with null" {
+		t.Fatalf("unexpected: %v %q", err, txt)
+	}
+}
+
+func TestHTMLTagRemoval(t *testing.T) {
+	html := `<html><head><title>Test</title></head><body><h1>Hello</h1><p>This is a paragraph</p></body></html>`
+	txt, err := ExtractText([]byte(html), "file.html")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	txt = strings.TrimSpace(txt)
+	if !strings.Contains(txt, "Test") || !strings.Contains(txt, "Hello") || !strings.Contains(txt, "paragraph") {
+		t.Fatalf("HTML tag removal failed: expected content not found in: %q", txt)
+	}
+}
+
+func TestExtractTextEmptyFile(t *testing.T) {
+	data := []byte("")
+	txt, err := ExtractText(data, "empty.txt")
+	if err != nil || txt != "" {
+		t.Fatalf("unexpected for empty file: %v %q", err, txt)
+	}
+}
+
+func TestBinaryDataDetection(t *testing.T) {
+	testCases := []struct {
+		name     string
+		data     []byte
+		expected bool
+	}{
+		{"empty", []byte(""), false},
+		{"text only", []byte("hello world"), false},
+		{"with null byte", []byte("hello\x00world"), true},
+		{"leading null", []byte("\x00hello"), true},
+		{"binary header", []byte("\x89\x50\x4E\x47"), true},
+		{"text with null", []byte("test\x00123"), true},
+	}
+
+	for _, tc := range testCases {
+		result := isBinaryData(tc.data)
+		if result != tc.expected {
+			t.Errorf("%s: expected %v, got %v", tc.name, tc.expected, result)
+		}
 	}
 }

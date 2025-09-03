@@ -225,6 +225,32 @@ func ReloadRulesHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// LoadRulesFromFileHandler loads rules from a file specified in the request body.
+func LoadRulesFromFileHandler(w http.ResponseWriter, r *http.Request) {
+	type request struct {
+		Path string `json:"path"`
+	}
+	var req request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		ErrorResponse(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+
+	if req.Path == "" {
+		ErrorResponse(w, http.StatusBadRequest, "missing path parameter")
+		return
+	}
+
+	if err := engine.LoadRulesFromYAML(req.Path); err != nil {
+		log.Printf("Error loading rules from file %s: %v", req.Path, err)
+		ErrorResponse(w, http.StatusInternalServerError, "failed to load rules file")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "rules loaded successfully"})
+}
+
 // HealthHandler reports service health.
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

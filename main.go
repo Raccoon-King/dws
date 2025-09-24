@@ -64,15 +64,15 @@ func NewServer(rulesFile string) (*http.Server, error) {
 	if port == "" {
 		port = "8080" // Default port to match Docker/K8s configs
 	}
-	
+
 	recoveryMiddleware := func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if err := recover(); err != nil {
 					logrus.WithFields(logrus.Fields{
-						"error": err,
-						"url":   r.URL.Path,
-						"method": r.Method,
+						"error":      err,
+						"url":        r.URL.Path,
+						"method":     r.Method,
 						"user_agent": r.UserAgent(),
 					}).Error("HTTP handler panic recovered")
 					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -121,7 +121,7 @@ func initLLMService() (*llm.Service, error) {
 	}
 
 	var config struct {
-		LLM     llm.Config      `yaml:"llm"`
+		LLM     llm.Config        `yaml:"llm"`
 		OpenAI  llm.OpenAIConfig  `yaml:"openai"`
 		Bedrock llm.BedrockConfig `yaml:"bedrock"`
 	}

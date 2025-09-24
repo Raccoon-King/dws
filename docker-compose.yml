@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  dws:
+    build: .
+    ports:
+      - "8082:8080"
+    environment:
+      - PORT=8080
+      - RULES_FILE=/etc/dws/rules.yaml
+      - DEBUG=false
+      - LOGGING=stdout
+      - LLM_ENABLED=false
+      - LLM_CONFIG=/etc/dws/llm.yaml
+    volumes:
+      - ./config:/etc/dws

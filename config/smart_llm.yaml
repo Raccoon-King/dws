@@ -1,0 +1,100 @@
+# Smart LLM Configuration - Optimized for Cost and Performance
+
+llm:
+  enabled: true
+  provider: "openai"
+  timeout: "30s"
+  max_tokens: 500  # Reduced from 1000 for cost savings
+  temperature: 0.3  # Lower temperature for more focused analysis
+
+# Smart analysis triggers
+smart_analysis:
+  # Only use LLM if regex finds at least 2 findings
+  min_findings_threshold: 2
+
+  # Only trigger LLM for these severity levels
+  trigger_severities: ["high", "medium"]
+
+  # Skip tiny documents (not worth the API call)
+  min_document_length: 200
+
+  # Truncate large documents to save tokens
+  max_document_length: 4000  # ~1500 tokens
+
+  # Only analyze specific rule categories with LLM
+  analyze_rule_types: ["disease", "aggressive", "property"]
+
+  # Skip LLM if regex confidence is high
+  skip_if_high_confidence: true
+
+# Tiered analysis modes
+analysis_modes:
+  # Mode 1: Minimal LLM (cheapest)
+  minimal:
+    enabled: true
+    max_tokens: 200
+    only_validate: true  # Only validate findings, no new analysis
+    trigger_severities: ["high"]
+    min_findings_threshold: 3
+
+  # Mode 2: Balanced (recommended)
+  balanced:
+    enabled: true
+    max_tokens: 500
+    validate_and_analyze: true
+    trigger_severities: ["high", "medium"]
+    min_findings_threshold: 2
+
+  # Mode 3: Comprehensive (most expensive)
+  comprehensive:
+    enabled: false
+    max_tokens: 1000
+    full_analysis: true
+    trigger_severities: ["high", "medium", "low"]
+    min_findings_threshold: 1
+
+# Cost optimization rules
+cost_optimization:
+  # Skip LLM entirely for these scenarios
+  skip_llm_when:
+    - no_regex_findings: true
+    - document_too_short: 100
+    - only_informational_findings: true
+    - known_safe_patterns: ["vaccination", "prevention", "treatment"]
+
+  # Batch processing settings
+  batch_processing:
+    enabled: false
+    batch_size: 5
+    batch_timeout: "2m"
+
+  # Token usage monitoring
+  token_limits:
+    daily_limit: 50000
+    per_request_limit: 2000
+    alert_threshold: 40000
+
+# Rule-specific LLM triggers
+rule_triggers:
+  # High-priority rules that always get LLM analysis
+  always_analyze:
+    - "disease-rabies"
+    - "aggressive-behavior"
+    - "bites-and-scratches"
+
+  # Rules that never need LLM (clear-cut patterns)
+  never_analyze:
+    - "raccoon-mention"
+    - "correction-vermin-typo"
+
+  # Rules that only get LLM if multiple findings
+  conditional_analyze:
+    - rule_pattern: "property-*"
+      min_findings: 3
+    - rule_pattern: "noise-*"
+      min_findings: 5
+
+openai:
+  api_key: "${LLM_API_KEY}"
+  model: "gpt-3.5-turbo"  # Cheaper than GPT-4
+  base_url: ""

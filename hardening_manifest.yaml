@@ -1,0 +1,118 @@
+# Iron Bank hardening manifest for Document Scanner Service (DWS)
+# This file is required for Iron Bank compliance per section 4.2.1
+
+apiVersion: v1
+kind: hardening_manifest
+
+# Repository information
+repository: dws
+name: document-scanner-service
+namespace: dws
+
+# Container image information
+tags:
+  - "1.0.0"
+  - "latest"
+
+# Maintainer information
+maintainers:
+  - name: "DWS Team"
+    email: "dws-maintainers@example.com"
+
+# Resources that need to be downloaded and their checksums
+# Iron Bank requires all external dependencies to be listed here
+resources:
+  # Go dependencies are vendored, no external downloads during build
+  - name: "go.mod"
+    url: "local"
+    type: "dependency_manifest"
+    checksum: "sha256:$(sha256sum go.mod | cut -d' ' -f1)"
+  - name: "go.sum"
+    url: "local"
+    type: "dependency_checksums"
+    checksum: "sha256:$(sha256sum go.sum | cut -d' ' -f1)"
+
+# Base image information
+base_image:
+  name: "registry1.dso.mil/ironbank/redhat/ubi/ubi8"
+  tag: "latest"
+
+runtime_image:
+  name: "registry1.dso.mil/ironbank/google/distroless/static"
+  tag: "latest"
+
+# OCI Labels for container metadata
+labels:
+  - key: "org.opencontainers.image.title"
+    value: "Document Scanner Service"
+  - key: "org.opencontainers.image.description"
+    value: "A document scanning service with rules engine and LLM integration"
+  - key: "org.opencontainers.image.version"
+    value: "1.0.0"
+  - key: "org.opencontainers.image.created"
+    value: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  - key: "org.opencontainers.image.revision"
+    value: "$(git rev-parse HEAD)"
+  - key: "org.opencontainers.image.vendor"
+    value: "DWS Team"
+  - key: "org.opencontainers.image.licenses"
+    value: "Apache-2.0"
+  - key: "org.opencontainers.image.source"
+    value: "https://github.com/example/dws"
+  - key: "org.opencontainers.image.documentation"
+    value: "https://github.com/example/dws/blob/main/README.md"
+
+# Security context
+security:
+  run_as_non_root: true
+  run_as_user: 65534  # nobody user in distroless
+  read_only_root_filesystem: true
+
+# Capabilities - Iron Bank requires minimal capabilities
+capabilities:
+  drop:
+    - ALL
+  add: []  # No additional capabilities needed
+
+# Build arguments
+build_args:
+  - name: "CGO_ENABLED"
+    value: "0"
+  - name: "GOOS"
+    value: "linux"
+  - name: "GOARCH"
+    value: "amd64"
+
+# Exposed ports
+expose:
+  - port: 8080
+    protocol: "tcp"
+    description: "HTTP API port"
+
+# Health check configuration
+healthcheck:
+  test: ["/dws", "-health-check"]
+  interval: "30s"
+  timeout: "3s"
+  start_period: "5s"
+  retries: 3
+
+# Environment variables
+environment:
+  - name: "DWS_PORT"
+    value: "8080"
+  - name: "DWS_DEBUG"
+    value: "false"
+
+# Volume mounts for configuration
+volumes:
+  - name: "config"
+    mount_path: "/etc/dws"
+    description: "Configuration files"
+
+# Compliance information
+compliance:
+  stig_compliance: true
+  fips_enabled: false  # Will be enabled in future version per section 4.2.6
+  secrets_removed: true
+  development_tools_removed: true

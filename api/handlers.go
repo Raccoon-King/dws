@@ -15,15 +15,22 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"dws/engine"
+	"dws/llm"
 	"dws/scanner"
 	"dws/s3"
 )
 
 var rulesFile string
+var llmAnalyzer *llm.Analyzer
 
 // SetRulesFile sets the rules file path for the api package.
 func SetRulesFile(path string) {
 	rulesFile = path
+}
+
+// SetLLMAnalyzer sets the LLM analyzer for the api package.
+func SetLLMAnalyzer(analyzer *llm.Analyzer) {
+	llmAnalyzer = analyzer
 }
 
 type Report struct {
@@ -142,6 +149,42 @@ func DocsHandler(w http.ResponseWriter, r *http.Request) {
 				},
 			},
 			CurlExample: `curl -X POST -H "Content-Type: application/json" -d '{"s3_url":"s3://my-bucket/document.pdf","region":"us-west-2"}' http://localhost:8080/scan/s3`,
+		},
+		{
+			Path:        "/scan/llm",
+			Method:      "POST",
+			Description: "Upload a document for LLM-powered analysis with semantic understanding.",
+			DataShapes: []DataShape{
+				{
+					Name:        "Request",
+					Description: "multipart/form-data with optional analysis rules",
+					Shape:       `{"file": "<file>", "rules": ["optional custom rules"]}`,
+				},
+				{
+					Name:        "Response",
+					Description: "LLM analysis results with confidence scores and reasoning.",
+					Shape:       `{"file_id":"uploaded-filename","findings":[{"rule_id":"llm-finding-1","severity":"high","line":3,"context":"matching text","description":"finding description","confidence":0.9,"reasoning":"why this is a finding"}],"summary":"overall analysis","confidence":0.8,"tokens_used":150,"model":"gpt-3.5-turbo","provider":"openai"}`,
+				},
+			},
+			CurlExample: `curl -X POST -F 'file=@/path/to/your/file.pdf' -F 'rules=["Look for API keys","Check for PII"]' http://localhost:8080/scan/llm`,
+		},
+		{
+			Path:        "/scan/hybrid",
+			Method:      "POST",
+			Description: "Upload a document for hybrid analysis combining regex rules with LLM validation.",
+			DataShapes: []DataShape{
+				{
+					Name:        "Request",
+					Description: "multipart/form-data",
+					Shape:       `{"file": "<file>"}`,
+				},
+				{
+					Name:        "Response",
+					Description: "Combined analysis with validated findings and LLM insights.",
+					Shape:       `{"file_id":"uploaded-filename","regex_findings":[...],"llm_analysis":{...},"validated_findings":[...],"tokens_used":150}`,
+				},
+			},
+			CurlExample: `curl -X POST -F 'file=@/path/to/your/file.pdf' http://localhost:8080/scan/hybrid`,
 		},
 		{
 			Path:        "/docs",
@@ -443,4 +486,224 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"ok"}`))
+}
+
+// LLMScanHandler performs document analysis using LLM
+func LLMScanHandler(w http.ResponseWriter, r *http.Request) {
+	if llmAnalyzer == nil {
+		ErrorResponse(w, http.StatusServiceUnavailable, "LLM service is not available")
+		return
+	}
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		ErrorResponse(w, http.StatusBadRequest, "invalid multipart")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		ErrorResponse(w, http.StatusBadRequest, "missing file")
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, "read error")
+		return
+	}
+
+	text, err := scanner.ExtractText(data, header.Filename)
+	if err != nil {
+		ErrorResponse(w, http.StatusBadRequest, "unsupported file")
+		return
+	}
+
+	// Parse optional custom rules
+	var customRules []string
+	if rulesParam := r.FormValue("rules"); rulesParam != "" {
+		if err := json.Unmarshal([]byte(rulesParam), &customRules); err != nil {
+			logrus.WithFields(logrus.Fields{
+				"rules_param": rulesParam,
+				"error":       err,
+			}).Warn("Failed to parse custom rules, using defaults")
+		}
+	}
+
+	// Create analysis request
+	analysisReq := llm.AnalysisRequest{
+		Text:     text,
+		Filename: header.Filename,
+		Rules:    customRules,
+	}
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	// Perform LLM analysis
+	analysisResp, err := llmAnalyzer.AnalyzeDocument(ctx, analysisReq)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"filename": header.Filename,
+			"error":    err,
+		}).Error("LLM analysis failed")
+		ErrorResponse(w, http.StatusInternalServerError, "LLM analysis failed")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(analysisResp)
+}
+
+// HybridScanHandler performs both regex and LLM analysis
+func HybridScanHandler(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		ErrorResponse(w, http.StatusBadRequest, "invalid multipart")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		ErrorResponse(w, http.StatusBadRequest, "missing file")
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, "read error")
+		return
+	}
+
+	text, err := scanner.ExtractText(data, header.Filename)
+	if err != nil {
+		ErrorResponse(w, http.StatusBadRequest, "unsupported file")
+		return
+	}
+
+	// Perform regex analysis first
+	regexFindings := engine.Evaluate(text, header.Filename, engine.GetRules())
+
+	// Create response object
+	response := map[string]interface{}{
+		"file_id":        header.Filename,
+		"regex_findings": regexFindings,
+	}
+
+	// Perform LLM analysis if available
+	if llmAnalyzer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		// LLM analysis
+		analysisReq := llm.AnalysisRequest{
+			Text:     text,
+			Filename: header.Filename,
+		}
+
+		llmAnalysis, err := llmAnalyzer.AnalyzeDocument(ctx, analysisReq)
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"filename": header.Filename,
+				"error":    err,
+			}).Warn("LLM analysis failed in hybrid mode")
+		} else {
+			response["llm_analysis"] = llmAnalysis
+		}
+
+		// Validate regex findings with LLM
+		validatedFindings, err := llmAnalyzer.ValidateFindings(ctx, regexFindings, text, header.Filename)
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"filename": header.Filename,
+				"error":    err,
+			}).Warn("LLM validation failed in hybrid mode")
+			response["validated_findings"] = regexFindings // Use original if validation fails
+		} else {
+			response["validated_findings"] = validatedFindings
+		}
+
+		if llmAnalysis != nil {
+			response["tokens_used"] = llmAnalysis.TokensUsed
+		}
+	} else {
+		response["validated_findings"] = regexFindings
+		response["llm_analysis"] = nil
+		response["tokens_used"] = 0
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// SmartScanHandler performs optimized analysis using rules as pre-filters
+func SmartScanHandler(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		ErrorResponse(w, http.StatusBadRequest, "invalid multipart")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		ErrorResponse(w, http.StatusBadRequest, "missing file")
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, "read error")
+		return
+	}
+
+	text, err := scanner.ExtractText(data, header.Filename)
+	if err != nil {
+		ErrorResponse(w, http.StatusBadRequest, "unsupported file")
+		return
+	}
+
+	// Smart pre-filtering analysis
+	if llmAnalyzer != nil {
+		// Create smart analyzer with cost optimization
+		smartConfig := llm.SmartAnalysisConfig{
+			MinFindingsThreshold: 2,
+			TriggerSeverities:    []string{"high", "medium"},
+			MinDocumentLength:    200,
+			MaxDocumentLength:    4000,
+			AnalyzeRuleTypes:     []string{"disease", "aggressive", "property"},
+		}
+
+		smartAnalyzer := llm.NewSmartAnalyzer(llmAnalyzer, smartConfig)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		defer cancel()
+
+		result, err := smartAnalyzer.AnalyzeWithPrefiltering(ctx, text, header.Filename, engine.GetRules())
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"filename": header.Filename,
+				"error":    err,
+			}).Error("Smart analysis failed")
+			ErrorResponse(w, http.StatusInternalServerError, "smart analysis failed")
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+	} else {
+		// Fallback to regex-only
+		regexFindings := engine.Evaluate(text, header.Filename, engine.GetRules())
+		response := map[string]interface{}{
+			"regex_findings":     regexFindings,
+			"llm_used":          false,
+			"validated_findings": regexFindings,
+			"tokens_used":       0,
+			"cost_savings":      "100% - LLM disabled",
+			"analysis_reason":   "LLM service not available",
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}
 }

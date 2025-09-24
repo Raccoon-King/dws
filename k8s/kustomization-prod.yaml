@@ -1,0 +1,112 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Metadata
+metadata:
+  name: dws-production
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# Target namespace
+namespace: dws-prod
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/name: dws
+  app.kubernetes.io/part-of: document-scanner
+  environment: production
+  managed-by: kustomize
+
+# Resources to include
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - secrets.yaml
+  - configmap.yaml
+  - deployment-prod.yaml
+  - service-prod.yaml
+  - ingress-prod.yaml
+  - monitoring.yaml
+
+# ConfigMap generator for rules
+configMapGenerator:
+  - name: dws-rules
+    files:
+      - config/default.yaml
+    options:
+      labels:
+        app.kubernetes.io/component: rules
+
+  - name: dws-llm-config
+    files:
+      - config/llm.yaml
+    options:
+      labels:
+        app.kubernetes.io/component: llm-config
+
+# Secret generator (use with sealed-secrets or external-secrets in production)
+secretGenerator:
+  - name: dws-admin-auth
+    literals:
+      - auth=admin:$2y$10$...  # htpasswd generated hash
+
+# Images to use
+images:
+  - name: dws
+    newTag: v1.0.0
+
+# Patches for production-specific overrides
+patches:
+  # Increase replica count for production
+  - target:
+      kind: Deployment
+      name: dws
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 5
+
+  # Production resource limits
+  - target:
+      kind: Deployment
+      name: dws
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+            ephemeral-storage: "5Gi"
+
+  # Production HPA settings
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: dws-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 5
+      - op: replace
+        path: /spec/maxReplicas
+        value: 20
+
+# Replacements for environment-specific values
+replacements:
+  - source:
+      kind: ConfigMap
+      name: dws-rules
+      fieldPath: metadata.name
+    targets:
+      - select:
+          kind: Deployment
+        fieldPaths:
+          - spec.template.metadata.annotations.[configmap.reloader.stakater.com/reload]
+
+# Validation
+openapi:
+  path: https://k8s.io/examples/application/nginx-app/schema.yaml

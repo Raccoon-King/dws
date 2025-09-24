@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dws-service
+  namespace: dws-prod
+  labels:
+    app.kubernetes.io/name: dws
+    app.kubernetes.io/component: service
+    app.kubernetes.io/part-of: document-scanner
+    environment: production
+  annotations:
+    # Service mesh annotations (if using Istio)
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
+    # Prometheus monitoring
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/health"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: dws
+    app.kubernetes.io/component: api-server
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  sessionAffinity: None
+
+---
+# Headless service for service discovery
+apiVersion: v1
+kind: Service
+metadata:
+  name: dws-headless
+  namespace: dws-prod
+  labels:
+    app.kubernetes.io/name: dws
+    app.kubernetes.io/component: headless-service
+    app.kubernetes.io/part-of: document-scanner
+    environment: production
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: dws
+    app.kubernetes.io/component: api-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

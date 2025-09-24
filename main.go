@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
 
 	"dws/api"
 	"dws/engine"
+	"dws/llm"
 )
 
 var debugMode bool
@@ -44,6 +47,19 @@ func NewServer(rulesFile string) (*http.Server, error) {
 			return nil, fmt.Errorf("failed to load rules from %s: %w", rulesFile, err)
 		}
 	}
+
+	// Initialize LLM service
+	llmService, err := initLLMService()
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to initialize LLM service, LLM features will be disabled")
+	} else if llmService != nil && llmService.IsEnabled() {
+		analyzer := llm.NewAnalyzer(llmService)
+		api.SetLLMAnalyzer(analyzer)
+		logrus.Info("LLM service initialized successfully")
+	} else {
+		logrus.Info("LLM service disabled")
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080" // Default port to match Docker/K8s configs
@@ -69,6 +85,9 @@ func NewServer(rulesFile string) (*http.Server, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/scan", api.ScanHandler)
 	mux.HandleFunc("/scan/s3", api.S3ScanHandler)
+	mux.HandleFunc("/scan/llm", api.LLMScanHandler)
+	mux.HandleFunc("/scan/hybrid", api.HybridScanHandler)
+	mux.HandleFunc("/scan/smart", api.SmartScanHandler)
 	mux.HandleFunc("/rules/reload", api.ReloadRulesHandler)
 	mux.HandleFunc("/rules/load", api.LoadRulesFromFileHandler)
 	mux.HandleFunc("/ruleset", api.RulesetHandler)
@@ -77,7 +96,64 @@ func NewServer(rulesFile string) (*http.Server, error) {
 	return &http.Server{Addr: ":" + port, Handler: recoveryMiddleware(mux)}, nil
 }
 
+// initLLMService initializes the LLM service from configuration
+func initLLMService() (*llm.Service, error) {
+	// Check if LLM is enabled via environment variable
+	if enabled := os.Getenv("LLM_ENABLED"); enabled != "true" {
+		return nil, nil // LLM disabled
+	}
 
+	// Load LLM configuration
+	configFile := os.Getenv("LLM_CONFIG")
+	if configFile == "" {
+		configFile = "config/llm.yaml" // Default LLM config
+	}
+
+	// Check if config file exists
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		return nil, fmt.Errorf("LLM config file not found: %s", configFile)
+	}
+
+	// Read and parse config
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read LLM config: %w", err)
+	}
+
+	var config struct {
+		LLM     llm.Config      `yaml:"llm"`
+		OpenAI  llm.OpenAIConfig  `yaml:"openai"`
+		Bedrock llm.BedrockConfig `yaml:"bedrock"`
+	}
+
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse LLM config: %w", err)
+	}
+
+	// Set provider-specific configs
+	config.LLM.OpenAI = config.OpenAI
+	config.LLM.Bedrock = config.Bedrock
+
+	// Expand environment variables in sensitive fields
+	config.LLM.OpenAI.APIKey = os.ExpandEnv(config.LLM.OpenAI.APIKey)
+	config.LLM.Bedrock.AccessKeyID = os.ExpandEnv(config.LLM.Bedrock.AccessKeyID)
+	config.LLM.Bedrock.SecretAccessKey = os.ExpandEnv(config.LLM.Bedrock.SecretAccessKey)
+	config.LLM.Bedrock.SessionToken = os.ExpandEnv(config.LLM.Bedrock.SessionToken)
+	config.LLM.Bedrock.RoleARN = os.ExpandEnv(config.LLM.Bedrock.RoleARN)
+
+	// Parse timeout
+	if config.LLM.Timeout == 0 {
+		config.LLM.Timeout = 30 * time.Second
+	}
+
+	// Create LLM service
+	service, err := llm.NewService(config.LLM)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create LLM service: %w", err)
+	}
+
+	return service, nil
+}
 
 func run() error {
 	rulesFile := os.Getenv("RULES_FILE")

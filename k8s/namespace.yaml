@@ -1,7 +1,28 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: dws
+  name: dws-system
   labels:
-    name: dws
-    app: document-scanner
+    name: dws-system
+    app.kubernetes.io/name: dws
+    app.kubernetes.io/part-of: document-scanner
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dws-prod
+  labels:
+    name: dws-prod
+    app.kubernetes.io/name: dws
+    app.kubernetes.io/part-of: document-scanner
+    environment: production
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dws-staging
+  labels:
+    name: dws-staging
+    app.kubernetes.io/name: dws
+    app.kubernetes.io/part-of: document-scanner
+    environment: staging

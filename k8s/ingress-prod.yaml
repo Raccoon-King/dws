@@ -1,0 +1,151 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dws-ingress
+  namespace: dws-prod
+  labels:
+    app.kubernetes.io/name: dws
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: document-scanner
+    environment: production
+  annotations:
+    # NGINX Ingress Controller annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'";
+
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/rate-limit-connections: "10"
+
+    # Request size limits
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/client-max-body-size: "10m"
+
+    # Timeouts
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+
+    # Enable CORS for API access
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://your-frontend-domain.com"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "POST, GET, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+
+    # Certificate management
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    cert-manager.io/acme-challenge-type: http01
+
+spec:
+  ingressClassName: nginx
+
+  tls:
+    - hosts:
+        - dws-api.yourdomain.com
+      secretName: dws-tls-secret
+
+  rules:
+    - host: dws-api.yourdomain.com
+      http:
+        paths:
+          # Health check endpoint (no auth required)
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: dws-service
+                port:
+                  number: 80
+
+          # API documentation (public)
+          - path: /docs
+            pathType: Exact
+            backend:
+              service:
+                name: dws-service
+                port:
+                  number: 80
+
+          # Main API endpoints
+          - path: /scan
+            pathType: Prefix
+            backend:
+              service:
+                name: dws-service
+                port:
+                  number: 80
+
+          - path: /rules
+            pathType: Prefix
+            backend:
+              service:
+                name: dws-service
+                port:
+                  number: 80
+
+---
+# Ingress for internal/admin endpoints (requires authentication)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dws-admin-ingress
+  namespace: dws-prod
+  labels:
+    app.kubernetes.io/name: dws
+    app.kubernetes.io/component: admin-ingress
+    app.kubernetes.io/part-of: document-scanner
+    environment: production
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+
+    # Basic auth for admin endpoints
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: dws-admin-auth
+    nginx.ingress.kubernetes.io/auth-realm: "DWS Admin Area"
+
+    # Whitelist internal IPs only
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+spec:
+  ingressClassName: nginx
+
+  tls:
+    - hosts:
+        - dws-admin.yourdomain.com
+      secretName: dws-admin-tls-secret
+
+  rules:
+    - host: dws-admin.yourdomain.com
+      http:
+        paths:
+          # Admin endpoints for rule management
+          - path: /rules/reload
+            pathType: Exact
+            backend:
+              service:
+                name: dws-service
+                port:
+                  number: 80
+
+          - path: /rules/load
+            pathType: Exact
+            backend:
+              service:
+                name: dws-service
+                port:
+                  number: 80

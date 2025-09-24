@@ -1,0 +1,61 @@
+# LLM Service Configuration
+
+llm:
+  # Enable/disable LLM functionality
+  enabled: false
+
+  # Provider selection: openai, bedrock, ollama, azure
+  provider: "openai"
+
+  # Request timeout
+  timeout: "30s"
+
+  # Token limits
+  max_tokens: 1000
+
+  # Temperature for text generation (0.0-1.0)
+  temperature: 0.7
+
+# OpenAI-compatible provider settings (OpenAI, Ollama, Azure OpenAI)
+openai:
+  # API key (required)
+  api_key: "${LLM_API_KEY}"
+
+  # Base URL for API (optional, defaults to OpenAI)
+  # For Ollama: "http://localhost:11434/v1"
+  # For Azure: "https://your-resource.openai.azure.com"
+  base_url: ""
+
+  # Model name
+  model: "gpt-3.5-turbo"
+
+  # Organization ID (optional, for OpenAI)
+  org_id: ""
+
+# Amazon Bedrock provider settings
+bedrock:
+  # AWS region
+  region: "us-east-1"
+
+  # AWS credentials (optional, will use default credential chain if not provided)
+  access_key_id: "${AWS_ACCESS_KEY_ID}"
+  secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+  session_token: "${AWS_SESSION_TOKEN}"
+
+  # IAM role ARN for assume role (optional)
+  role_arn: "${AWS_ROLE_ARN}"
+
+  # Bedrock model ID
+  # Claude: "anthropic.claude-3-sonnet-20240229-v1:0"
+  # Titan: "amazon.titan-text-express-v1"
+  # Llama: "meta.llama2-70b-chat-v1"
+  model_id: "anthropic.claude-3-sonnet-20240229-v1:0"
+
+# Analysis rules for LLM-based scanning
+analysis_rules:
+  - "Personally identifiable information (PII) such as names, addresses, phone numbers"
+  - "Financial information including credit card numbers, bank accounts, SSNs"
+  - "API keys, passwords, tokens, and other authentication credentials"
+  - "Confidential business information and trade secrets"
+  - "Healthcare information and medical records"
+  - "Legal documents and attorney-client privileged information"

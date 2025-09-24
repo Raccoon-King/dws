@@ -1,0 +1,269 @@
+# ServiceMonitor for Prometheus scraping
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: dws-monitoring
+  namespace: dws-prod
+  labels:
+    app.kubernetes.io/name: dws
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: document-scanner
+    environment: production
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dws
+      app.kubernetes.io/component: service
+  endpoints:
+    - port: http
+      path: /health
+      interval: 30s
+      scrapeTimeout: 10s
+      scheme: http
+      honorLabels: true
+
+---
+# PrometheusRule for alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: dws-alerts
+  namespace: dws-prod
+  labels:
+    app.kubernetes.io/name: dws
+    app.kubernetes.io/component: alerting
+    app.kubernetes.io/part-of: document-scanner
+    environment: production
+spec:
+  groups:
+    - name: dws.rules
+      interval: 30s
+      rules:
+        # High error rate alert
+        - alert: DWSHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{job="dws-service", status=~"5.."}[5m])) by (instance)
+              /
+              sum(rate(http_requests_total{job="dws-service"}[5m])) by (instance)
+            ) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            service: dws
+          annotations:
+            summary: "DWS high error rate detected"
+            description: "DWS instance {{ $labels.instance }} has error rate above 10% for 5 minutes"
+
+        # High memory usage
+        - alert: DWSHighMemoryUsage
+          expr: |
+            (
+              container_memory_working_set_bytes{pod=~"dws-.*", container="dws"}
+              /
+              container_spec_memory_limit_bytes{pod=~"dws-.*", container="dws"}
+            ) > 0.9
+          for: 10m
+          labels:
+            severity: warning
+            service: dws
+          annotations:
+            summary: "DWS high memory usage"
+            description: "DWS pod {{ $labels.pod }} memory usage is above 90%"
+
+        # High CPU usage
+        - alert: DWSHighCPUUsage
+          expr: |
+            (
+              rate(container_cpu_usage_seconds_total{pod=~"dws-.*", container="dws"}[5m])
+              /
+              container_spec_cpu_quota{pod=~"dws-.*", container="dws"} * 100000
+            ) > 0.8
+          for: 15m
+          labels:
+            severity: warning
+            service: dws
+          annotations:
+            summary: "DWS high CPU usage"
+            description: "DWS pod {{ $labels.pod }} CPU usage is above 80%"
+
+        # Pod down alert
+        - alert: DWSPodDown
+          expr: up{job="dws-service"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            service: dws
+          annotations:
+            summary: "DWS pod is down"
+            description: "DWS pod {{ $labels.instance }} has been down for more than 1 minute"
+
+        # Low replica count
+        - alert: DWSLowReplicaCount
+          expr: |
+            (
+              kube_deployment_status_replicas_available{deployment="dws", namespace="dws-prod"}
+              /
+              kube_deployment_spec_replicas{deployment="dws", namespace="dws-prod"}
+            ) < 0.5
+          for: 5m
+          labels:
+            severity: critical
+            service: dws
+          annotations:
+            summary: "DWS low replica count"
+            description: "DWS deployment has less than 50% of desired replicas available"
+
+        # LLM API failures (if LLM is enabled)
+        - alert: DWSLLMAPIFailures
+          expr: |
+            increase(dws_llm_errors_total[10m]) > 5
+          for: 2m
+          labels:
+            severity: warning
+            service: dws
+            component: llm
+          annotations:
+            summary: "DWS LLM API failures"
+            description: "DWS has experienced more than 5 LLM API failures in the last 10 minutes"
+
+        # High request latency
+        - alert: DWSHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum by (instance, le) (
+                rate(http_request_duration_seconds_bucket{job="dws-service"}[5m])
+              )
+            ) > 2.0
+          for: 10m
+          labels:
+            severity: warning
+            service: dws
+          annotations:
+            summary: "DWS high request latency"
+            description: "DWS 95th percentile latency is above 2 seconds"
+
+---
+# Grafana Dashboard ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dws-grafana-dashboard
+  namespace: dws-prod
+  labels:
+    app.kubernetes.io/name: dws
+    app.kubernetes.io/component: dashboard
+    app.kubernetes.io/part-of: document-scanner
+    grafana_dashboard: "1"
+data:
+  dws-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Document Scanner Service (DWS)",
+        "tags": ["dws", "document-scanner"],
+        "style": "dark",
+        "timezone": "browser",
+        "refresh": "30s",
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{job=\"dws-service\"}[5m])) by (endpoint)",
+                "legendFormat": "{{endpoint}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Error Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{job=\"dws-service\", status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"dws-service\"}[5m]))",
+                "legendFormat": "Error Rate"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "container_memory_working_set_bytes{pod=~\"dws-.*\", container=\"dws\"} / 1024 / 1024",
+                "legendFormat": "{{pod}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(container_cpu_usage_seconds_total{pod=~\"dws-.*\", container=\"dws\"}[5m]) * 100",
+                "legendFormat": "{{pod}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          }
+        ]
+      }
+    }
+
+---
+# Log aggregation configuration (for Fluentd/Fluent Bit)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dws-logging-config
+  namespace: dws-prod
+  labels:
+    app.kubernetes.io/name: dws
+    app.kubernetes.io/component: logging
+    app.kubernetes.io/part-of: document-scanner
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         1
+        Log_Level     info
+        Daemon        off
+
+    [INPUT]
+        Name              tail
+        Path              /var/log/containers/dws-*.log
+        Parser            docker
+        Tag               kube.dws.*
+        Refresh_Interval  5
+        Mem_Buf_Limit     50MB
+        Skip_Long_Lines   On
+
+    [FILTER]
+        Name                kubernetes
+        Match               kube.dws.*
+        Kube_URL            https://kubernetes.default.svc:443
+        Kube_CA_File        /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        Kube_Token_File     /var/run/secrets/kubernetes.io/serviceaccount/token
+        Merge_Log           On
+        Keep_Log            Off
+        K8S-Logging.Parser  On
+        K8S-Logging.Exclude On
+
+    [OUTPUT]
+        Name  es
+        Match kube.dws.*
+        Host  elasticsearch.logging.svc.cluster.local
+        Port  9200
+        Index dws-logs
+        Type  _doc

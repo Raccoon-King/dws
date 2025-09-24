@@ -25,11 +25,12 @@ type RulesConfig struct {
 
 // Finding represents a rule match inside a document.
 type Finding struct {
-	FileID   string `json:"file_id"`
-	RuleID   string `json:"rule_id"`
-	Severity string `json:"severity"`
-	Line     int    `json:"line"`
-	Context  string `json:"context"`
+	FileID      string `json:"file_id"`
+	RuleID      string `json:"rule_id"`
+	Severity    string `json:"severity"`
+	Line        int    `json:"line"`
+	Context     string `json:"context"`
+	Description string `json:"description"`
 }
 
 var currentRules []Rule
@@ -84,11 +85,12 @@ func Evaluate(text, fileID string, rules []Rule) []Finding {
 			}
 			if re.MatchString(line) {
 				findings = append(findings, Finding{
-					FileID:   fileID,
-					RuleID:   rule.ID,
-					Severity: rule.Severity,
-					Line:     i + 1,
-					Context:  line,
+					FileID:      fileID,
+					RuleID:      rule.ID,
+					Severity:    rule.Severity,
+					Line:        i + 1,
+					Context:     line,
+					Description: rule.Description,
 				})
 			}
 		}

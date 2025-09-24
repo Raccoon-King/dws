@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -9,11 +10,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"dws/engine"
 	"dws/scanner"
+	"dws/s3"
 )
 
 var rulesFile string
@@ -121,6 +124,24 @@ func DocsHandler(w http.ResponseWriter, r *http.Request) {
 				},
 			},
 			CurlExample: `curl -X POST -F 'file=@/path/to/your/file.pdf' 'http://localhost:8080/ruleset?rule=customrules'`,
+		},
+		{
+			Path:        "/scan/s3",
+			Method:      "POST",
+			Description: "Scan a document from S3 URL. Supports IAM roles and access key authentication.",
+			DataShapes: []DataShape{
+				{
+					Name:        "Request",
+					Description: "JSON object with S3 URL and optional authentication parameters",
+					Shape:       `{"s3_url":"s3://bucket/path/file.pdf","region":"us-east-1","access_key_id":"optional","secret_access_key":"optional","session_token":"optional","role_arn":"optional"}`,
+				},
+				{
+					Name:        "Response",
+					Description: "A structured report of findings from the S3 file.",
+					Shape:       `{"file_id":"file.pdf","findings":[{"rule_id":"rule-1","severity":"high","line":3,"context":"line containing match","description":"rule description"}]}`,
+				},
+			},
+			CurlExample: `curl -X POST -H "Content-Type: application/json" -d '{"s3_url":"s3://my-bucket/document.pdf","region":"us-west-2"}' http://localhost:8080/scan/s3`,
 		},
 		{
 			Path:        "/docs",
@@ -275,6 +296,141 @@ func LoadRulesFromFileHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "rules loaded successfully"})
+}
+
+// S3ScanRequest represents a request to scan a file from S3
+type S3ScanRequest struct {
+	S3URL           string `json:"s3_url"`
+	Region          string `json:"region,omitempty"`
+	AccessKeyID     string `json:"access_key_id,omitempty"`
+	SecretAccessKey string `json:"secret_access_key,omitempty"`
+	SessionToken    string `json:"session_token,omitempty"`
+	RoleARN         string `json:"role_arn,omitempty"`
+}
+
+// S3ScanHandler processes documents from S3 URLs
+func S3ScanHandler(w http.ResponseWriter, r *http.Request) {
+	var req S3ScanRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		ErrorResponse(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.S3URL == "" {
+		ErrorResponse(w, http.StatusBadRequest, "missing s3_url parameter")
+		return
+	}
+
+	// Set default region if not provided
+	if req.Region == "" {
+		req.Region = "us-east-1"
+	}
+
+	// Create S3 client configuration
+	config := s3.Config{
+		Region:          req.Region,
+		AccessKeyID:     req.AccessKeyID,
+		SecretAccessKey: req.SecretAccessKey,
+		SessionToken:    req.SessionToken,
+		RoleARN:         req.RoleARN,
+		Timeout:         30 * time.Second,
+	}
+
+	client, err := s3.NewClient(config)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"s3_url": req.S3URL,
+			"error":  err,
+		}).Error("Failed to create S3 client")
+		ErrorResponse(w, http.StatusInternalServerError, "failed to create S3 client")
+		return
+	}
+
+	// Create context with timeout for the entire operation
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Download file from S3 with detailed error handling
+	data, filename, err := client.DownloadFileFromURL(ctx, req.S3URL)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"s3_url": req.S3URL,
+			"error":  err,
+		}).Error("Failed to download file from S3")
+
+		// Check for specific error types
+		if ctx.Err() == context.DeadlineExceeded {
+			ErrorResponse(w, http.StatusRequestTimeout, "download timeout: file took too long to download from S3")
+			return
+		}
+
+		// Check for AWS-specific errors
+		if err.Error() == "NoSuchBucket" || strings.Contains(err.Error(), "NoSuchBucket") {
+			ErrorResponse(w, http.StatusNotFound, "S3 bucket not found")
+			return
+		}
+		if err.Error() == "NoSuchKey" || strings.Contains(err.Error(), "NoSuchKey") {
+			ErrorResponse(w, http.StatusNotFound, "S3 file not found")
+			return
+		}
+		if strings.Contains(err.Error(), "AccessDenied") {
+			ErrorResponse(w, http.StatusForbidden, "access denied: check S3 permissions")
+			return
+		}
+		if strings.Contains(err.Error(), "invalid S3 URL") {
+			ErrorResponse(w, http.StatusBadRequest, "invalid S3 URL format")
+			return
+		}
+
+		ErrorResponse(w, http.StatusInternalServerError, "failed to download file from S3")
+		return
+	}
+
+	// Check file size limits (10MB max)
+	const maxFileSize = 10 << 20 // 10 MB
+	if len(data) > maxFileSize {
+		logrus.WithFields(logrus.Fields{
+			"s3_url":   req.S3URL,
+			"filename": filename,
+			"size":     len(data),
+			"max_size": maxFileSize,
+		}).Warn("File size exceeds maximum allowed")
+		ErrorResponse(w, http.StatusRequestEntityTooLarge, "file size exceeds 10MB limit")
+		return
+	}
+
+	// Extract text from the downloaded file with timeout protection
+	text, err := scanner.ExtractText(data, filename)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"s3_url":   req.S3URL,
+			"filename": filename,
+			"error":    err,
+		}).Error("Failed to extract text from S3 file")
+
+		if strings.Contains(err.Error(), "unsupported file format") {
+			ErrorResponse(w, http.StatusUnsupportedMediaType, fmt.Sprintf("unsupported file format: %s", err.Error()))
+			return
+		}
+
+		ErrorResponse(w, http.StatusInternalServerError, "failed to extract text from file")
+		return
+	}
+
+	// Process the text with the scanning engine
+	findings := engine.Evaluate(text, filename, engine.GetRules())
+
+	if engine.GetDebugMode() {
+		logrus.WithFields(logrus.Fields{
+			"s3_url":   req.S3URL,
+			"filename": filename,
+			"findings": findings,
+		}).Debug("S3 scan findings before encoding")
+	}
+
+	// Return the results
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(Report{FileID: filename, Findings: findings})
 }
 
 // HealthHandler reports service health.

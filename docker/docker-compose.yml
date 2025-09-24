@@ -3,8 +3,8 @@ version: '3.8'
 services:
   dws:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: dws-api
     ports:
       - "8080:8080"
@@ -13,8 +13,8 @@ services:
       - LOGGING=stdout
       - DEBUG=false
     volumes:
-      - ./rules.yaml:/root/rules.yaml:ro
-      
+      - C:/Users/jesse/dws/docker/rules.yaml:/root/rules.yaml:ro
+
       - dws-logs:/var/log
     restart: unless-stopped
     healthcheck:

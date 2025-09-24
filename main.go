@@ -68,6 +68,7 @@ func NewServer(rulesFile string) (*http.Server, error) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/scan", api.ScanHandler)
+	mux.HandleFunc("/scan/s3", api.S3ScanHandler)
 	mux.HandleFunc("/rules/reload", api.ReloadRulesHandler)
 	mux.HandleFunc("/rules/load", api.LoadRulesFromFileHandler)
 	mux.HandleFunc("/ruleset", api.RulesetHandler)

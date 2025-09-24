@@ -94,7 +94,7 @@ Create image reference
 {{- $registry := .Values.image.registry -}}
 {{- $repository := .Values.image.repository -}}
 {{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
-{{- if .Values.ironBank.enabled -}}
+{{- if and .Values.ironBank .Values.ironBank.enabled -}}
 {{- $registry = .Values.ironBank.registry -}}
 {{- $repository = .Values.ironBank.repository -}}
 {{- end -}}
@@ -206,7 +206,7 @@ Volumes
 - name: {{ .name }}
   {{- if .configMap }}
   configMap:
-    name: {{ .configMap.name }}
+    name: {{ if .configMap.name }}{{ .configMap.name }}{{ else }}{{ include "dws.configMapName" $ }}{{ end }}
     {{- if .configMap.defaultMode }}
     defaultMode: {{ .configMap.defaultMode }}
     {{- end }}

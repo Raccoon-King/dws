@@ -93,4 +93,4 @@ volumes:
     emptyDir: {}
   - name: config
     configMap:
-      name: '{{ include "dws.configMapName" . }}'
+      name: ""  # Will be set by template

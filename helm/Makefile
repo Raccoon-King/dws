@@ -26,22 +26,22 @@ template-prod: ## Generate manifests with prod values
 	@echo "Production manifests generated in manifests-prod.yaml"
 
 dry-run: ## Perform a dry run installation
-	helm install $(RELEASE_NAME) . --namespace $(NAMESPACE) --create-namespace --dry-run --debug
+	helm install $(RELEASE_NAME) . --namespace $(NAMESPACE) --dry-run --debug
 
 dry-run-dev: ## Perform a dry run with dev values
-	helm install $(RELEASE_NAME) . --namespace $(NAMESPACE)-dev --create-namespace -f values-dev.yaml --dry-run --debug
+	helm install $(RELEASE_NAME) . --namespace $(NAMESPACE)-dev -f values-dev.yaml --dry-run --debug
 
 dry-run-prod: ## Perform a dry run with prod values
-	helm install $(RELEASE_NAME) . --namespace $(NAMESPACE)-prod --create-namespace -f values-prod.yaml --dry-run --debug
+	helm install $(RELEASE_NAME) . --namespace $(NAMESPACE)-prod -f values-prod.yaml --dry-run --debug
 
-install: ## Install the chart
-	helm install $(RELEASE_NAME) . --namespace $(NAMESPACE) --create-namespace
+install: ## Install the chart (requires existing namespace)
+	helm install $(RELEASE_NAME) . --namespace $(NAMESPACE)
 
-install-dev: ## Install with development values
-	helm install $(RELEASE_NAME)-dev . --namespace $(NAMESPACE)-dev --create-namespace -f values-dev.yaml
+install-dev: ## Install with development values (requires existing namespace)
+	helm install $(RELEASE_NAME)-dev . --namespace $(NAMESPACE)-dev -f values-dev.yaml
 
-install-prod: ## Install with production values
-	helm install $(RELEASE_NAME)-prod . --namespace $(NAMESPACE)-prod --create-namespace -f values-prod.yaml
+install-prod: ## Install with production values (requires existing namespace)
+	helm install $(RELEASE_NAME)-prod . --namespace $(NAMESPACE)-prod -f values-prod.yaml
 
 upgrade: ## Upgrade the release
 	helm upgrade $(RELEASE_NAME) . --namespace $(NAMESPACE)
@@ -122,3 +122,11 @@ ironbank-template: ## Generate templates with Iron Bank images
 		--set image.repository=ironbank/opensource/dws \
 		> manifests-ironbank.yaml
 	@echo "Iron Bank manifests generated in manifests-ironbank.yaml"
+
+# Custom registry targets
+custom-registry-template: ## Generate templates with custom registry (see values-custom-registry.yaml)
+	helm template $(RELEASE_NAME) . -f values-custom-registry.yaml > manifests-custom.yaml
+	@echo "Custom registry manifests generated in manifests-custom.yaml"
+
+custom-registry-install: ## Install with custom registry values (requires existing namespace)
+	helm install $(RELEASE_NAME) . --namespace $(NAMESPACE) -f values-custom-registry.yaml

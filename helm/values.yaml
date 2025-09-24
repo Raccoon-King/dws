@@ -10,8 +10,8 @@ global:
 
 # Image configuration
 image:
-  registry: registry1.dso.mil
-  repository: ironbank/opensource/dws
+  registry: registry1.dso.mil  # Can be overridden for non-Platform One deployments
+  repository: ironbank/opensource/dws  # Can be overridden for different registries
   tag: "1.0.0"
   pullPolicy: IfNotPresent
   pullSecrets: []
@@ -255,30 +255,9 @@ podDisruptionBudget:
   minAvailable: 2
   # maxUnavailable: 1
 
-# Network Policy
-networkPolicy:
-  enabled: true
-  ingress:
-    enabled: true
-    from:
-      - namespaceSelector:
-          matchLabels:
-            name: ingress-nginx
-      - podSelector:
-          matchLabels:
-            app.kubernetes.io/name: prometheus
-  egress:
-    enabled: true
-    to:
-      # Allow DNS resolution
-      - namespaceSelector:
-          matchLabels:
-            name: kube-system
-        podSelector:
-          matchLabels:
-            k8s-app: kube-dns
-      # Allow LLM API calls (if enabled)
-      - {}
+# Network Policy (removed due to compatibility issues)
+# networkPolicy:
+#   enabled: false
 
 # Monitoring
 monitoring:

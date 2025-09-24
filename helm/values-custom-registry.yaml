@@ -1,0 +1,59 @@
+# Example values for custom registry deployment
+# Copy and modify this file for non-Platform One deployments
+
+# Custom registry configuration
+image:
+  registry: docker.io  # Change to your registry
+  repository: yourorg/dws  # Change to your repository
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+  pullSecrets:
+    - your-registry-secret  # Add your registry pull secret
+
+# Disable Iron Bank specific features
+ironBank:
+  enabled: false
+
+# Minimal configuration for basic deployment
+replicaCount: 1
+
+# Basic resource limits
+deployment:
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Disable advanced features that might not be available
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+# Ingress (customize for your environment)
+ingress:
+  enabled: false
+  # Enable and configure if needed:
+  # className: "nginx"  # or your ingress class
+  # hosts:
+  #   - host: dws.yourdomain.com
+  #     paths:
+  #       - path: /
+  #         pathType: Prefix
+
+# Basic monitoring setup
+monitoring:
+  serviceMonitor:
+    enabled: false
+  prometheusRule:
+    enabled: false

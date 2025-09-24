@@ -248,13 +248,3 @@ autoscaling/v2beta1
 {{- end -}}
 {{- end }}
 
-{{/*
-Network Policy API version
-*/}}
-{{- define "dws.networkPolicy.apiVersion" -}}
-{{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1/NetworkPolicy" -}}
-networking.k8s.io/v1
-{{- else -}}
-networking.k8s.io/v1beta1
-{{- end -}}
-{{- end }}

@@ -45,9 +45,7 @@
 {{- if .Values.podDisruptionBudget.enabled }}
 - ✅ Pod Disruption Budget enabled
 {{- end }}
-{{- if .Values.networkPolicy.enabled }}
-- ✅ Network policies for security
-{{- end }}
+{{- /* Network policy removed due to compatibility issues */ -}}
 - ✅ Security contexts and non-root execution
 
 🔧 Management Commands:

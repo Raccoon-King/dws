@@ -41,9 +41,6 @@ COPY --from=builder /build/dws /dws
 # Copy default configuration files (if they exist)
 COPY --from=builder /build/config /etc/dws/
 
-# Copy entrypoint script from scripts folder
-COPY --from=builder /build/scripts/entrypoint.sh /entrypoint.sh
-
 # Distroless images run as non-root by default (nobody user)
 # No need to set USER as distroless handles this
 
@@ -54,5 +51,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD ["/dws", "-health-check"] || exit 1
 
-# Use entrypoint script as required by Iron Bank
-ENTRYPOINT ["/entrypoint.sh"]
+# Run binary directly (distroless doesn't have shell for scripts)
+ENTRYPOINT ["/dws"]

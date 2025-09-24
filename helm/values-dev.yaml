@@ -1,6 +1,13 @@
 # Development environment values for dws
 # This overrides the default values.yaml for development deployments
 
+# Image configuration for local development
+image:
+  registry: ""  # No registry for local images
+  repository: dws
+  tag: "dev"
+  pullPolicy: Never  # Use local image only
+
 # Development environment settings
 replicaCount: 1
 

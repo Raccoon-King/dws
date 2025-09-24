@@ -98,7 +98,11 @@ Create image reference
 {{- $registry = .Values.ironBank.registry -}}
 {{- $repository = .Values.ironBank.repository -}}
 {{- end -}}
+{{- if $registry -}}
 {{- printf "%s/%s:%s" $registry $repository $tag -}}
+{{- else -}}
+{{- printf "%s:%s" $repository $tag -}}
+{{- end -}}
 {{- end }}
 
 {{/*

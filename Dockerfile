@@ -44,12 +44,12 @@ COPY --from=builder /build/config /etc/dws/
 # Copy entrypoint script from scripts folder
 COPY --from=builder /build/scripts/entrypoint.sh /entrypoint.sh
 
-# Make entrypoint executable and set up non-root user
+# Make entrypoint executable and use existing nobody user (UID 65534)
 RUN chmod +x /entrypoint.sh && \
     microdnf update -y && \
-    microdnf clean all && \
-    useradd -r -u 65534 -g root nonroot
+    microdnf clean all
 
+# Use existing nobody user (UID 65534)
 USER 65534
 
 # Expose port

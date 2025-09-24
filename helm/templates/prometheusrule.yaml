@@ -1,0 +1,18 @@
+{{- if and .Values.monitoring.prometheusRule.enabled .Capabilities.APIVersions.Has "monitoring.coreos.com/v1/PrometheusRule" }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "dws.fullname" . }}
+  namespace: {{ .Values.monitoring.prometheusRule.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "dws.labels" . | nindent 4 }}
+    app.kubernetes.io/component: alerting
+spec:
+  groups:
+    - name: dws.rules
+      interval: 30s
+      rules:
+        {{- with .Values.monitoring.prometheusRule.rules }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+{{- end }}

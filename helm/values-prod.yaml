@@ -1,0 +1,253 @@
+# Production environment values for dws
+# This overrides the default values.yaml for production deployments
+
+# Application configuration
+app:
+  debug: false
+  logging: "stdout"
+
+# Production scaling
+replicaCount: 5
+
+# Production-grade resources
+deployment:
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+      ephemeral-storage: 5Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+      ephemeral-storage: 1Gi
+
+  # Production affinity rules
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - dws
+          topologyKey: kubernetes.io/hostname
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - dws
+            topologyKey: topology.kubernetes.io/zone
+
+# LLM configuration for production
+llm:
+  enabled: true  # Enable LLM features in production
+  provider: "openai"
+  timeout: "30s"
+  maxTokens: 2000
+  temperature: 0.3  # Lower temperature for more consistent results
+
+  openai:
+    model: "gpt-4-turbo-preview"
+    baseUrl: ""
+    orgId: ""
+
+  bedrock:
+    region: "us-east-1"
+    modelId: "anthropic.claude-3-sonnet-20240229-v1:0"
+
+# AWS configuration for production
+aws:
+  region: "us-east-1"
+  s3:
+    timeout: "60s"  # Longer timeout for production
+
+# Production autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 5
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+
+# Production ingress with TLS
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains";
+  hosts:
+    - host: dws-api.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: dws-tls
+      hosts:
+        - dws-api.yourdomain.com
+
+# Production admin ingress with authentication
+adminIngress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: dws-admin-auth
+    nginx.ingress.kubernetes.io/auth-realm: "DWS Admin Area"
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: dws-admin.yourdomain.com
+      paths:
+        - path: /rules
+          pathType: Prefix
+  tls:
+    - secretName: dws-admin-tls
+      hosts:
+        - dws-admin.yourdomain.com
+
+# Enable network policies for production
+networkPolicy:
+  enabled: true
+  ingress:
+    enabled: true
+    from:
+      - namespaceSelector:
+          matchLabels:
+            name: ingress-nginx
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: prometheus
+  egress:
+    enabled: true
+    to:
+      # Allow DNS resolution
+      - namespaceSelector:
+          matchLabels:
+            name: kube-system
+        podSelector:
+          matchLabels:
+            k8s-app: kube-dns
+      # Allow LLM API calls (if enabled)
+      - {}
+
+# Production monitoring
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+    labels:
+      prometheus: kube-prometheus
+  prometheusRule:
+    enabled: true
+    rules:
+      - alert: DWSHighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{job="dws-service", status=~"5.."}[5m])) by (instance)
+            /
+            sum(rate(http_requests_total{job="dws-service"}[5m])) by (instance)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DWS high error rate detected"
+          description: "DWS instance {{ $labels.instance }} has error rate above 10%"
+
+      - alert: DWSHighMemoryUsage
+        expr: |
+          (
+            container_memory_working_set_bytes{pod=~"dws-.*", container="dws"}
+            /
+            container_spec_memory_limit_bytes{pod=~"dws-.*", container="dws"}
+          ) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DWS high memory usage"
+          description: "DWS pod {{ $labels.pod }} memory usage is above 90%"
+
+      - alert: DWSPodDown
+        expr: up{job="dws-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DWS pod is down"
+          description: "DWS pod {{ $labels.instance }} has been down for more than 1 minute"
+
+# Production rules configuration
+configMap:
+  data:
+    rules.yaml: |
+      rules:
+        # Security patterns
+        - id: "secret-detection"
+          pattern: "(?i)(password|passwd|pwd|secret|key|token|api[_-]?key|auth[_-]?token)\\s*[=:]\\s*['\"]?[a-zA-Z0-9+/=]{8,}"
+          severity: "critical"
+          description: "Potential secret or credential detected"
+
+        - id: "pii-ssn"
+          pattern: "\\b\\d{3}-\\d{2}-\\d{4}\\b"
+          severity: "high"
+          description: "Social Security Number detected"
+
+        - id: "pii-credit-card"
+          pattern: "\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|3[0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\\b"
+          severity: "high"
+          description: "Credit card number detected"
+
+        # System patterns
+        - id: "system-error"
+          pattern: "(?i)(error|exception|panic|fatal|critical)"
+          severity: "medium"
+          description: "System error or exception detected"
+
+        - id: "ip-address"
+          pattern: "\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b"
+          severity: "low"
+          description: "IP address detected"
+
+# Production node selection and tolerations
+deployment:
+  nodeSelector:
+    node-type: worker
+  tolerations:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "dws"
+      effect: "NoSchedule"
+
+# Production secrets (to be created separately)
+secrets:
+  create: false  # Managed externally via sealed-secrets or external-secrets

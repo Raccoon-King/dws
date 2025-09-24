@@ -1,0 +1,428 @@
+# Default values for dws
+# This is a YAML-formatted file.
+# Declare variables to be substituted into your templates.
+
+# Global values
+global:
+  imagePullSecrets: []
+  annotations: {}
+  labels: {}
+
+# Image configuration
+image:
+  registry: registry1.dso.mil
+  repository: ironbank/opensource/dws
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# Iron Bank image override (for development/testing)
+# ironBank:
+#   enabled: true
+#   registry: registry1.dso.mil
+#   repository: ironbank/opensource/dws
+
+# Application configuration
+app:
+  name: dws
+  port: 8080
+  debug: false
+  logging: "stdout"  # stdout, stderr, file
+  rulesFile: /etc/dws/rules.yaml
+
+# Deployment configuration
+replicaCount: 3
+
+deployment:
+  annotations: {}
+  labels: {}
+
+  # Strategy
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  # Pod template
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/health"
+
+  podLabels: {}
+
+  # Security Context (Iron Bank compliance)
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65534  # nobody user
+    runAsGroup: 65534
+    fsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 65534
+
+  # Resources
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+      ephemeral-storage: 5Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+      ephemeral-storage: 1Gi
+
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - dws
+            topologyKey: kubernetes.io/hostname
+
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  # Startup probe for slower initialization
+  startupProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+  annotations: {}
+  labels: {}
+
+# ServiceAccount
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+  automountServiceAccountToken: false
+
+# ConfigMap for rules and LLM configuration
+configMap:
+  create: true
+  name: ""
+  data:
+    rules.yaml: |
+      rules:
+        - id: "example-rule"
+          pattern: "example-pattern"
+          severity: "medium"
+          description: "Example rule for demonstration"
+
+    llm.yaml: |
+      llm:
+        enabled: {{ .Values.llm.enabled }}
+        provider: "{{ .Values.llm.provider }}"
+        timeout: "{{ .Values.llm.timeout }}"
+        max_tokens: {{ .Values.llm.maxTokens }}
+        temperature: {{ .Values.llm.temperature }}
+
+      openai:
+        api_key: "${LLM_API_KEY}"
+        base_url: "{{ .Values.llm.openai.baseUrl }}"
+        model: "{{ .Values.llm.openai.model }}"
+        org_id: "{{ .Values.llm.openai.orgId }}"
+
+      bedrock:
+        region: "{{ .Values.llm.bedrock.region }}"
+        access_key_id: "${AWS_ACCESS_KEY_ID}"
+        secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+        session_token: "${AWS_SESSION_TOKEN}"
+        role_arn: "${AWS_ROLE_ARN}"
+        model_id: "{{ .Values.llm.bedrock.modelId }}"
+
+      analysis_rules:
+        {{- range .Values.llm.analysisRules }}
+        - "{{ . }}"
+        {{- end }}
+
+# Secret configuration (for LLM API keys, etc.)
+secrets:
+  create: false
+  name: ""
+  data: {}
+    # llm-api-key: ""
+    # admin-auth: ""
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: dws.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: dws-tls
+      hosts:
+        - dws.example.com
+
+# Admin ingress (separate for admin endpoints)
+adminIngress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: dws-admin-auth
+    nginx.ingress.kubernetes.io/auth-realm: "DWS Admin Area"
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+  hosts:
+    - host: dws-admin.example.com
+      paths:
+        - path: /rules
+          pathType: Prefix
+  tls:
+    - secretName: dws-admin-tls
+      hosts:
+        - dws-admin.example.com
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  # behavior:
+  #   scaleDown:
+  #     stabilizationWindowSeconds: 300
+  #     policies:
+  #     - type: Percent
+  #       value: 50
+  #       periodSeconds: 60
+  #   scaleUp:
+  #     stabilizationWindowSeconds: 60
+  #     policies:
+  #     - type: Percent
+  #       value: 100
+  #       periodSeconds: 15
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+  # maxUnavailable: 1
+
+# Network Policy
+networkPolicy:
+  enabled: true
+  ingress:
+    enabled: true
+    from:
+      - namespaceSelector:
+          matchLabels:
+            name: ingress-nginx
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: prometheus
+  egress:
+    enabled: true
+    to:
+      # Allow DNS resolution
+      - namespaceSelector:
+          matchLabels:
+            name: kube-system
+        podSelector:
+          matchLabels:
+            k8s-app: kube-dns
+      # Allow LLM API calls (if enabled)
+      - {}
+
+# Monitoring
+monitoring:
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+    path: /health
+    labels: {}
+    annotations: {}
+
+  prometheusRule:
+    enabled: false
+    namespace: ""
+    rules:
+      - alert: DWSHighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{job="dws-service", status=~"5.."}[5m])) by (instance)
+            /
+            sum(rate(http_requests_total{job="dws-service"}[5m])) by (instance)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DWS high error rate detected"
+          description: "DWS instance {{ $labels.instance }} has error rate above 10%"
+
+# Volume mounts
+volumes:
+  - name: tmp
+    emptyDir: {}
+  - name: config
+    configMap:
+      name: '{{ include "dws.configMapName" . }}'
+
+volumeMounts:
+  - name: tmp
+    mountPath: /tmp
+  - name: config
+    mountPath: /etc/dws
+    readOnly: true
+
+# Environment variables
+env:
+  # Core application settings
+  - name: PORT
+    value: "{{ .Values.app.port }}"
+  - name: DEBUG
+    value: "{{ .Values.app.debug }}"
+  - name: LOGGING
+    value: "{{ .Values.app.logging }}"
+  - name: RULES_FILE
+    value: "{{ .Values.app.rulesFile }}"
+
+  # LLM Configuration
+  - name: LLM_ENABLED
+    value: "{{ .Values.llm.enabled }}"
+  - name: LLM_CONFIG
+    value: "{{ .Values.llm.configFile }}"
+
+  # AWS/S3 Configuration (from environment or secrets)
+  - name: AWS_REGION
+    value: "{{ .Values.aws.region }}"
+
+# LLM Service Configuration
+llm:
+  enabled: false
+  configFile: /etc/dws/llm.yaml
+
+  # LLM Provider settings (used in configmap generation)
+  provider: "openai"  # openai, bedrock, ollama, azure
+  timeout: "30s"
+  maxTokens: 1000
+  temperature: 0.7
+
+  # OpenAI-compatible settings
+  openai:
+    model: "gpt-3.5-turbo"
+    baseUrl: ""  # Leave empty for default OpenAI, set for Ollama/Azure
+    orgId: ""
+
+  # Bedrock settings
+  bedrock:
+    region: "us-east-1"
+    modelId: "anthropic.claude-3-sonnet-20240229-v1:0"
+
+  # Analysis rules for LLM scanning
+  analysisRules:
+    - "Personally identifiable information (PII) such as names, addresses, phone numbers"
+    - "Financial information including credit card numbers, bank accounts, SSNs"
+    - "API keys, passwords, tokens, and other authentication credentials"
+    - "Confidential business information and trade secrets"
+    - "Healthcare information and medical records"
+    - "Legal documents and attorney-client privileged information"
+
+# AWS Configuration (for S3 and Bedrock)
+aws:
+  region: "us-east-1"
+  # Credentials are typically provided via:
+  # 1. IAM roles (recommended for EKS)
+  # 2. Environment variables from secrets
+  # 3. AWS credential chain
+
+  # S3 specific settings
+  s3:
+    timeout: "30s"
+
+# Secret configuration (for API keys and sensitive data)
+secrets:
+  create: false
+  name: ""
+  data: {}
+    # Example sensitive data (base64 encoded when created):
+    # LLM_API_KEY: ""           # OpenAI/Azure API key
+    # AWS_ACCESS_KEY_ID: ""     # AWS access key (if not using IAM roles)
+    # AWS_SECRET_ACCESS_KEY: "" # AWS secret key (if not using IAM roles)
+    # AWS_SESSION_TOKEN: ""     # AWS session token (if temporary credentials)
+    # AWS_ROLE_ARN: ""          # AWS role ARN for assume role
+
+# Environment variables from secrets/configmaps
+envFrom: []
+  # Example usage:
+  # - secretRef:
+  #     name: dws-secrets
+  # - configMapRef:
+  #     name: dws-config
+
+# Extra objects to deploy (can be used for custom resources)
+extraObjects: []
+
+# Test configuration
+tests:
+  enabled: true
+  image:
+    registry: registry1.dso.mil
+    repository: ironbank/redhat/ubi/ubi8-minimal
+    tag: latest
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi

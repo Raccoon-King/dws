@@ -51,10 +51,6 @@ Thumbs.db
 *.tmp
 *.temp
 
-# Helm charts
-helm/*/charts/
-helm/*/Chart.lock
-
 # Kubernetes generated files
 manifests*.yaml
 *.generated.yaml

@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dws.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dws.labels" . | nindent 4 }}
+    app.kubernetes.io/component: application
+  {{- with .Values.deployment.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    {{- toYaml .Values.deployment.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "dws.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dws.selectorLabels" . | nindent 8 }}
+        {{- with .Values.deployment.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        {{- include "dws.podAnnotations" . | nindent 8 }}
+    spec:
+      {{- include "dws.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "dws.serviceAccountName" . }}
+      securityContext:
+        {{- include "dws.podSecurityContext" . | nindent 8 }}
+      {{- with .Values.deployment.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.deployment.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.deployment.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: {{ include "dws.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- include "dws.securityContext" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.app.port }}
+              protocol: TCP
+          env:
+            {{- include "dws.env" . | nindent 12 }}
+            {{- if .Values.secrets.create }}
+            # Sensitive environment variables from secrets
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dws.secretName" . }}
+                  key: LLM_API_KEY
+                  optional: true
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dws.secretName" . }}
+                  key: AWS_ACCESS_KEY_ID
+                  optional: true
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dws.secretName" . }}
+                  key: AWS_SECRET_ACCESS_KEY
+                  optional: true
+            - name: AWS_SESSION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dws.secretName" . }}
+                  key: AWS_SESSION_TOKEN
+                  optional: true
+            - name: AWS_ROLE_ARN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dws.secretName" . }}
+                  key: AWS_ROLE_ARN
+                  optional: true
+            {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.deployment.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.deployment.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.deployment.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.deployment.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "dws.volumeMounts" . | nindent 12 }}
+            {{- if .Values.llm.enabled }}
+            - name: llm-config
+              mountPath: /etc/dws/llm.yaml
+              subPath: llm.yaml
+              readOnly: true
+            {{- end }}
+      volumes:
+        {{- include "dws.volumes" . | nindent 8 }}
+        {{- if .Values.llm.enabled }}
+        - name: llm-config
+          configMap:
+            name: {{ include "dws.fullname" . }}-llm-config
+        {{- end }}

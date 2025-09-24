@@ -1,0 +1,50 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: {{ include "dws.ingress.apiVersion" . }}
+kind: Ingress
+metadata:
+  name: {{ include "dws.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dws.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingress
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            {{- if semverCompare ">=1.18-0" $.Capabilities.KubeVersion.GitVersion }}
+            pathType: {{ .pathType }}
+            {{- end }}
+            backend:
+              {{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
+              service:
+                name: {{ include "dws.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.port }}
+              {{- else }}
+              serviceName: {{ include "dws.fullname" $ }}
+              servicePort: {{ $.Values.service.port }}
+              {{- end }}
+          {{- end }}
+    {{- end }}
+{{- end }}

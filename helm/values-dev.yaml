@@ -1,0 +1,96 @@
+# Development environment values for dws
+# This overrides the default values.yaml for development deployments
+
+# Development environment settings
+replicaCount: 1
+
+# Development environment settings
+app:
+  debug: true
+  logging: "stdout"
+
+# Reduce resource requirements for development
+deployment:
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+      ephemeral-storage: 2Gi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+      ephemeral-storage: 500Mi
+
+# Disable autoscaling in dev
+autoscaling:
+  enabled: false
+
+# Disable PDB for single replica
+podDisruptionBudget:
+  enabled: false
+
+# Less strict affinity for development
+deployment:
+  affinity: {}
+
+# Development ingress
+ingress:
+  enabled: true
+  className: "nginx"
+  hosts:
+    - host: dws-dev.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Enable admin ingress for development
+adminIngress:
+  enabled: true
+  hosts:
+    - host: dws-admin-dev.local
+      paths:
+        - path: /rules
+          pathType: Prefix
+  tls: []
+
+# Relaxed network policy for development
+networkPolicy:
+  enabled: false
+
+# LLM disabled for development (can be enabled for testing)
+llm:
+  enabled: false
+
+# AWS configuration for development
+aws:
+  region: "us-east-1"
+
+# Development-specific config
+configMap:
+  data:
+    rules.yaml: |
+      rules:
+        - id: "dev-test-rule"
+          pattern: "test|debug|development"
+          severity: "low"
+          description: "Development test pattern"
+        - id: "dev-error-rule"
+          pattern: "error|exception|panic"
+          severity: "high"
+          description: "Error detection rule for development"
+
+# Enable monitoring for development
+monitoring:
+  serviceMonitor:
+    enabled: false  # Disable unless Prometheus operator installed
+  prometheusRule:
+    enabled: false
+
+# Simplified volumes for development
+volumes:
+  - name: tmp
+    emptyDir: {}
+  - name: config
+    configMap:
+      name: '{{ include "dws.configMapName" . }}'

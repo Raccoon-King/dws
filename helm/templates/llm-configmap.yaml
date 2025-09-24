@@ -1,0 +1,37 @@
+{{- if and .Values.llm.enabled .Values.configMap.create -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dws.fullname" . }}-llm-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dws.labels" . | nindent 4 }}
+    app.kubernetes.io/component: llm-config
+data:
+  llm.yaml: |
+    llm:
+      enabled: {{ .Values.llm.enabled }}
+      provider: "{{ .Values.llm.provider }}"
+      timeout: "{{ .Values.llm.timeout }}"
+      max_tokens: {{ .Values.llm.maxTokens }}
+      temperature: {{ .Values.llm.temperature }}
+
+    openai:
+      api_key: "${LLM_API_KEY}"
+      base_url: "{{ .Values.llm.openai.baseUrl }}"
+      model: "{{ .Values.llm.openai.model }}"
+      org_id: "{{ .Values.llm.openai.orgId }}"
+
+    bedrock:
+      region: "{{ .Values.llm.bedrock.region }}"
+      access_key_id: "${AWS_ACCESS_KEY_ID}"
+      secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+      session_token: "${AWS_SESSION_TOKEN}"
+      role_arn: "${AWS_ROLE_ARN}"
+      model_id: "{{ .Values.llm.bedrock.modelId }}"
+
+    analysis_rules:
+      {{- range .Values.llm.analysisRules }}
+      - "{{ . }}"
+      {{- end }}
+{{- end }}

@@ -7,6 +7,7 @@
 # Test coverage and artifacts
 coverage
 coverage.out
+coverage.html
 *.out
 
 # Log files
@@ -35,6 +36,12 @@ debug_*.go
 # Go build artifacts
 main
 dws
+dws-*
+*.tar.gz
+*.tgz
+
+# Docker artifacts
+*.dockerignore
 
 # OS specific files
 .DS_Store
@@ -43,3 +50,22 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Helm charts
+helm/*/charts/
+helm/*/Chart.lock
+
+# Kubernetes generated files
+manifests*.yaml
+*.generated.yaml
+
+# Iron Bank artifacts
+hardening_manifest.yml
+
+# Package files
+*.deb
+*.rpm
+
+# Security scan results
+*.sarif
+*.json.gz

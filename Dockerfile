@@ -32,8 +32,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 # Run tests during build to ensure quality
 RUN go test ./... -short
 
-# Final stage: Iron Bank approved distroless image
-FROM registry1.dso.mil/ironbank/google/distroless/static
+# Final stage: Iron Bank approved minimal image with shell for entrypoint script
+FROM registry1.dso.mil/ironbank/redhat/ubi/ubi8-minimal
 
 # Copy the binary
 COPY --from=builder /build/dws /dws
@@ -41,8 +41,16 @@ COPY --from=builder /build/dws /dws
 # Copy default configuration files (if they exist)
 COPY --from=builder /build/config /etc/dws/
 
-# Distroless images run as non-root by default (nobody user)
-# No need to set USER as distroless handles this
+# Copy entrypoint script from scripts folder
+COPY --from=builder /build/scripts/entrypoint.sh /entrypoint.sh
+
+# Make entrypoint executable and set up non-root user
+RUN chmod +x /entrypoint.sh && \
+    microdnf update -y && \
+    microdnf clean all && \
+    useradd -r -u 65534 -g root nonroot
+
+USER 65534
 
 # Expose port
 EXPOSE 8080
@@ -51,5 +59,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD ["/dws", "-health-check"] || exit 1
 
-# Run binary directly (distroless doesn't have shell for scripts)
-ENTRYPOINT ["/dws"]
+# Use entrypoint script for better startup handling
+ENTRYPOINT ["/entrypoint.sh"]

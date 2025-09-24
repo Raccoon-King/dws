@@ -55,5 +55,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD ["/dws", "-health-check"] || exit 1
 
-# Use entrypoint script for better startup handling
-ENTRYPOINT ["/entrypoint.sh"]
+# Run DWS binary directly to avoid shell issues on Windows Docker
+ENTRYPOINT ["/dws"]

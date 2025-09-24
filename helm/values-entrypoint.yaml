@@ -1,0 +1,10 @@
+# Alternative values that use the entrypoint script
+# Use this if you want the enhanced startup logging from the entrypoint script
+
+# Override the command to use entrypoint script
+app:
+  command: ["/bin/sh", "/entrypoint.sh"]
+
+# All other values inherit from base values.yaml
+# You can combine this with other value files:
+# helm install dws . -f values.yaml -f values-entrypoint.yaml

@@ -47,6 +47,9 @@ spec:
         - name: {{ .Chart.Name }}
           image: {{ include "dws.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.app.command }}
+          command: {{- toYaml . | nindent 12 }}
+          {{- end }}
           securityContext:
             {{- include "dws.securityContext" . | nindent 12 }}
           ports:

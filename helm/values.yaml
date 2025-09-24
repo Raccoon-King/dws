@@ -29,6 +29,8 @@ app:
   debug: false
   logging: "stdout"  # stdout, stderr, file
   rulesFile: /etc/dws/rules.yaml
+  # Override command if needed (defaults to ["/dws"])
+  command: ["/dws"]
 
 # Deployment configuration
 replicaCount: 3

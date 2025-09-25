@@ -1,8 +1,8 @@
-version: '3.8'
-
 services:
   dws:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     ports:
       - "8082:8080"
     environment:
@@ -13,4 +13,5 @@ services:
       - LLM_ENABLED=false
       - LLM_CONFIG=/etc/dws/llm.yaml
     volumes:
-      - ./config:/etc/dws
+      - ./config:/etc/dws:ro
+    user: "0:0"  # Run as root to avoid permission issues with volume mounts

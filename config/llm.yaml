@@ -1,4 +1,5 @@
-# LLM Service Configuration
+# LLM Service Configuration - Classification Detection
+# Configuration for AI-powered classification marking analysis
 
 llm:
   # Enable/disable LLM functionality
@@ -51,11 +52,14 @@ bedrock:
   # Llama: "meta.llama2-70b-chat-v1"
   model_id: "anthropic.claude-3-sonnet-20240229-v1:0"
 
-# Analysis rules for LLM-based scanning
+# Analysis rules for LLM-based classification scanning
 analysis_rules:
-  - "Personally identifiable information (PII) such as names, addresses, phone numbers"
-  - "Financial information including credit card numbers, bank accounts, SSNs"
-  - "API keys, passwords, tokens, and other authentication credentials"
-  - "Confidential business information and trade secrets"
-  - "Healthcare information and medical records"
-  - "Legal documents and attorney-client privileged information"
+  - "US Government classification markings including TOP SECRET, SECRET, CONFIDENTIAL"
+  - "Classification portion markings such as (TS), (S), (C), (U)"
+  - "Dissemination control markings like NOFORN, NOCONTRACT, ORCON, REL TO"
+  - "Special Access Program (SAP) and Special Access Required (SAR) markings"
+  - "Sensitive Compartmented Information (SCI) and compartment identifiers"
+  - "Restricted Data (RD) and Formerly Restricted Data (FRD) atomic energy markings"
+  - "NATO classification markings and foreign government information (FGI)"
+  - "Classification authority references and declassification instructions"
+  - "Warning notices and classification banners in document headers/footers"
